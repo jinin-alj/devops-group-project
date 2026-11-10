@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wardrobe</title>
+</head>
+<body>
+  <h1>Wardrobe</h1>
+  <ul>
+    <li>wardrobe-service: <span id="wardrobe-status">checking...</span></li>
+    <li>outfit-service: <span id="outfit-status">checking...</span></li>
+  </ul>
+  <script>
+    // TODO: point these at the Azure URLs once the pipeline deploys the UI.
+    const serviceUrls = {
+      wardrobe: "http://localhost:8001",
+      outfit: "http://localhost:8002",
+    };
+
+    async function showHealth(serviceName) {
+      const statusElement = document.getElementById(`${serviceName}-status`);
+      try {
+        const response = await fetch(`${serviceUrls[serviceName]}/health`);
+        statusElement.textContent = response.ok ? "up" : `error ${response.status}`;
+      } catch (error) {
+        statusElement.textContent = "unreachable";
+      }
+    }
+
+    showHealth("wardrobe");
+    showHealth("outfit");
+  </script>
+</body>
+</html>

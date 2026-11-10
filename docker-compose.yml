@@ -1,0 +1,22 @@
+services:
+  wardrobe:
+    build: ./services/wardrobe
+    ports:
+      - "8001:8000"
+    environment:
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:8080}
+
+  outfit:
+    build: ./services/outfit
+    ports:
+      - "8002:8000"
+    environment:
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:8080}
+
+  # The UI ships to Static Web Apps in Azure, so locally we just serve the folder.
+  ui:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro

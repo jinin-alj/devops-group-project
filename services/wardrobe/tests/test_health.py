@@ -1,13 +1,16 @@
 import logging
-from fastapi.testclient import TestClient
+
 from app.main import app
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
+
 
 def test_health_returns_ok() -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "service": "wardrobe"}
+
 
 def test_each_request_writes_one_log_line(caplog) -> None:
     caplog.set_level(logging.INFO, logger="wardrobe.requests")
@@ -22,8 +25,16 @@ def test_each_request_writes_one_log_line(caplog) -> None:
     assert "status=200" in request_lines[0]
     assert "duration_ms=" in request_lines[0]
 
+
 def test_unknown_path_is_logged_with_404(caplog) -> None:
     caplog.set_level(logging.INFO, logger="wardrobe.requests")
     response = client.get("/does-not-exist")
     assert response.status_code == 404
     assert "status=404" in caplog.records[-1].getMessage()
+
+
+def test_cors_allows_only_the_ui_origin() -> None:
+    allowed = client.get("/health", headers={"Origin": "http://localhost:8080"})
+    blocked = client.get("/health", headers={"Origin": "http://evil.example"})
+    assert allowed.headers["access-control-allow-origin"] == "http://localhost:8080"
+    assert "access-control-allow-origin" not in blocked.headers
