@@ -6,8 +6,8 @@
 
 | Role | Member |
 |------|--------|
-| Product Owner | TBD |
-| Scrum Master | TBD |
+| Product Owner | Dana Dabbah |
+| Scrum Master | Gabriel |
 | Developers | All 5 members |
 
 ## Team
@@ -17,7 +17,7 @@
 | Jinin | @jinin-alj |
 | Salome | @salomeshioshvili |
 | Nikita | @NikitaDjandjgava |
-| Dana | @danadabbahh |
+| Dana | @danadabbah16 |
 | Gabriel | @flipman62 |
 
 ## Sprint Goal

@@ -161,7 +161,11 @@ Request logs (method, path, status, duration) go to stdout and are queryable in 
 
 | Name | GitHub | Sprint 0 | Sprint 1 | Sprint 2 |
 |------|--------|----------|----------|----------|
-| TODO | @todo  | PO / SM / Dev | | |
+| Dana | @danadabbah16 | | | |
+| Salome | @salomeshioshvili | | | |
+| Gabriel | @flipman62 | | | |
+| Nikita | @NikitaDjandjgava | | | |
+| Jinin | @jinin-alj | | | |
 
 Roles rotate each sprint (one Product Owner, one Scrum Master, everyone else Developer).
 
