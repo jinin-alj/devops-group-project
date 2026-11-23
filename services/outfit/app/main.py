@@ -114,12 +114,18 @@ async def fetch_wardrobe_items() -> list[dict[str, Any]]:
 @app.get("/stats/cost-per-wear")
 async def get_cost_per_wear() -> list[dict[str, Any]]:
     items = await fetch_wardrobe_items()
-    wears = get_repository().get_wears()
+    wears = [
+        {"item_id": item_id, "date": worn_on}
+        for item_id, worn_on in get_repository().get_wears()
+    ]
     return cost_per_wear(items, wears)
 
 
 @app.get("/stats/unworn")
 async def get_unworn_items() -> list[dict[str, Any]]:
     items = await fetch_wardrobe_items()
-    wears = get_repository().get_wears()
-    return unworn_items(items, wears)
+    wears = [
+        {"item_id": item_id, "date": worn_on}
+        for item_id, worn_on in get_repository().get_wears()
+    ]
+    return unworn_items(items, wears, date.today())
