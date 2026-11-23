@@ -6,8 +6,8 @@
 
 | Role | Member |
 |------|--------|
-| Product Owner | TBD |
-| Scrum Master | TBD |
+| Product Owner | Salome Shioshvili |
+| Scrum Master | Dana Dabbah |
 | Developers | All 5 members |
 
 ## Sprint Goal
@@ -22,14 +22,14 @@ Item numbers refer to the [Product Backlog](product-backlog.md). Items 2 to 8 we
 |---|------|-------|--------|
 | 2 | Azure resources created by code | Salome | |
 | 3 | Hello World deployed by the pipeline | Salome | |
-| 4 | Databases and migrations on startup | TBD (wardrobe), Gabriel (outfit) | |
-| 5–8 | Add, see, edit and delete a clothing item | TBD (wardrobe), TBD (UI) | |
-| 9 | Log what I am wearing | Gabriel (outfit), TBD (UI) | |
-| 10 | See cost per wear | Dana (logic), Gabriel (outfit), TBD (UI) | |
-| 11 | See pieces I have not worn in 60 days | Dana (logic), Gabriel (outfit), TBD (UI) | |
-| 14 | Clear messages when a service is down | Gabriel (outfit), TBD (UI) | |
-| 15 | Monitoring dashboard | TBD (UI and monitoring) | |
-| 16 | Service Level Objective | TBD (UI and monitoring) | |
+| 4 | Databases and migrations on startup | Jinin (wardrobe), Gabriel (outfit) | |
+| 5–8 | Add, see, edit and delete a clothing item | Jinin (wardrobe), Nikita (UI) | |
+| 9 | Log what I am wearing | Gabriel (outfit), Nikita (UI) | |
+| 10 | See cost per wear | Dana (logic), Gabriel (outfit), Nikita (UI) | |
+| 11 | See pieces I have not worn in 60 days | Dana (logic), Gabriel (outfit), Nikita (UI) | |
+| 14 | Clear messages when a service is down | Gabriel (outfit), Nikita (UI) | |
+| 15 | Monitoring dashboard | Nikita | |
+| 16 | Service Level Objective | Nikita | |
 | 17 | Project documentation | Everyone, coordinated by Dana | |
 
 Not selected: the weather suggestion and its manual fallback (12, 13) and the stretch items (18 to 21). They stay in the backlog for a next sprint.
@@ -43,7 +43,7 @@ Not selected: the weather suggestion and its manual fallback (12, 13) and the st
 - Live URL in the README
 - Decision record: deployment and pipeline
 
-**Wardrobe service – TBD**
+**Wardrobe service – Jinin**
 
 - Migration runner, merged first so the outfit service can reuse it
 - SQL Server in `docker-compose.yml`, with one database per service
@@ -58,7 +58,7 @@ Not selected: the weather suggestion and its manual fallback (12, 13) and the st
 - Calls to wardrobe-service with a timeout and a clear 503 message
 - Decision record: two-service architecture and partial failure
 
-**UI and monitoring – TBD**
+**UI and monitoring – Nikita**
 
 - Add, list, edit and delete items
 - "Wearing this" button and the stats
