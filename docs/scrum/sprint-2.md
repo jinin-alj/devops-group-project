@@ -22,12 +22,12 @@ Item numbers refer to the [Product Backlog](product-backlog.md). Items 2 to 8 we
 |---|------|-------|--------|
 | 2 | Azure resources created by code | Salome | |
 | 3 | Hello World deployed by the pipeline | Salome | |
-| 4 | Databases and migrations on startup | TBD (wardrobe), TBD (outfit) | |
+| 4 | Databases and migrations on startup | TBD (wardrobe), Gabriel (outfit) | |
 | 5–8 | Add, see, edit and delete a clothing item | TBD (wardrobe), TBD (UI) | |
-| 9 | Log what I am wearing | TBD (outfit), TBD (UI) | |
-| 10 | See cost per wear | Dana (logic), TBD (outfit, UI) | |
-| 11 | See pieces I have not worn in 60 days | Dana (logic), TBD (outfit, UI) | |
-| 14 | Clear messages when a service is down | TBD (outfit), TBD (UI) | |
+| 9 | Log what I am wearing | Gabriel (outfit), TBD (UI) | |
+| 10 | See cost per wear | Dana (logic), Gabriel (outfit), TBD (UI) | |
+| 11 | See pieces I have not worn in 60 days | Dana (logic), Gabriel (outfit), TBD (UI) | |
+| 14 | Clear messages when a service is down | Gabriel (outfit), TBD (UI) | |
 | 15 | Monitoring dashboard | TBD (UI and monitoring) | |
 | 16 | Service Level Objective | TBD (UI and monitoring) | |
 | 17 | Project documentation | Everyone, coordinated by Dana | |
@@ -51,7 +51,7 @@ Not selected: the weather suggestion and its manual fallback (12, 13) and the st
 - `docs/data-model.md`
 - Decision record: storage and data model
 
-**Outfit service – TBD**
+**Outfit service – Gabriel**
 
 - Its own database and migration, using the wardrobe migration runner
 - `POST /wears`, `GET /stats/cost-per-wear`, `GET /stats/unworn`
