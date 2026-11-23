@@ -4,7 +4,7 @@ A wardrobe app. You add your clothes once (category, color, warmth 1 to 5, price
 
 Built as a Scrum team for the Software Development and DevOps group assignment: planned in sprints, delivered by an automated pipeline, deployed on Azure, and monitored in production.
 
-**Live URL:** `TODO (add after the first deploy)`
+**Live URL:** `TODO — add the Static Web App URL after the first successful deploy` (resource group `rg-sdd-3b-g7`)
 
 ## Architecture
 
@@ -138,12 +138,23 @@ CI fails if coverage on the core logic drops below 70%.
 
 Everything lives in the group's resource group, `rg-sdd-<class>-g<N>`, and every resource name starts with the prefix `sdd-<class>-g<N>`.
 
+One-time setup, run by a team member with Contributor on the resource group:
+
 ```bash
 az login
-./infra/setup.sh
+az account set --subscription "IE Workspaces"
+gh auth login
+CLASS=3b GROUP=7 ./infra/setup.sh
 ```
 
-This creates two Container Apps, two serverless SQL databases (auto-pause) and one Static Web App. Configuration goes through environment variables and GitHub secrets only. No secrets are stored in the repo.
+The script creates the Log Analytics workspace, the Container Apps environment, two Container Apps (Consumption, 0 to 1 replica), a SQL server with two serverless databases (auto-pause after 60 minutes) and the Static Web App. It generates the database password and stores it only as a Container Apps secret. It also sets the GitHub variables `AZURE_PREFIX` and `AZURE_RESOURCE_GROUP` used by the pipeline. Running it again keeps the existing resources and rotates the database password.
+
+Then, once:
+
+1. Store the group's service principal as the GitHub secret `AZURE_CREDENTIALS`, in the format `{"clientId": "...", "clientSecret": "...", "subscriptionId": "...", "tenantId": "..."}`. Run `gh secret set AZURE_CREDENTIALS` and paste the JSON when asked, so it never lands in a file or the shell history.
+2. After the first pipeline run pushes the images, make both GHCR packages public (package settings on GitHub), so Azure can pull them without a registry password.
+
+After that, every merge to `main` deploys through `.github/workflows/cd.yml`. Nothing is changed by hand in Azure.
 
 ## Monitoring
 

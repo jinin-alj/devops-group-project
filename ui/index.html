@@ -11,11 +11,11 @@
     <li>wardrobe-service: <span id="wardrobe-status">checking...</span></li>
     <li>outfit-service: <span id="outfit-status">checking...</span></li>
   </ul>
+  <script src="config.js"></script>
   <script>
-    // TODO: point these at the Azure URLs once the pipeline deploys the UI.
     const serviceUrls = {
-      wardrobe: "http://localhost:8001",
-      outfit: "http://localhost:8002",
+      wardrobe: window.APP_CONFIG.wardrobeUrl,
+      outfit: window.APP_CONFIG.outfitUrl,
     };
 
     async function showHealth(serviceName) {
