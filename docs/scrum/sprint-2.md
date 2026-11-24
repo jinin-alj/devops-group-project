@@ -20,17 +20,17 @@ Item numbers refer to the [Product Backlog](product-backlog.md). Items 2 to 8 we
 
 | # | Item | Owner | Status |
 |---|------|-------|--------|
-| 2 | Azure resources created by code | Salome | |
-| 3 | Hello World deployed by the pipeline | Salome | |
-| 4 | Databases and migrations on startup | Jinin (wardrobe), Gabriel (outfit) | |
-| 5–8 | Add, see, edit and delete a clothing item | Jinin (wardrobe), Nikita (UI) | |
-| 9 | Log what I am wearing | Gabriel (outfit), Nikita (UI) | |
-| 10 | See cost per wear | Dana (logic), Gabriel (outfit), Nikita (UI) | |
-| 11 | See pieces I have not worn in 60 days | Dana (logic), Gabriel (outfit), Nikita (UI) | |
-| 14 | Clear messages when a service is down | Gabriel (outfit), Nikita (UI) | |
-| 15 | Monitoring dashboard | Nikita | |
-| 16 | Service Level Objective | Nikita | |
-| 17 | Project documentation | Everyone, coordinated by Dana | |
+| 2 | Azure resources created by code | Salome | Done (`infra/setup.sh`, pull request #10) |
+| 3 | Hello World deployed by the pipeline | Salome | Done (`cd.yml`, pull request #10) |
+| 4 | Databases and migrations on startup | Jinin (wardrobe), Gabriel (outfit) | Done (pull requests #12 to #14, #7) |
+| 5–8 | Add, see, edit and delete a clothing item | Jinin (wardrobe), Salome (UI) | Done (pull requests #15, #16, #11, #20) |
+| 9 | Log what I am wearing | Gabriel (outfit), Salome (UI) | Done (pull requests #7, #11, #20) |
+| 10 | See cost per wear | Dana (logic), Gabriel (outfit), Salome (UI) | Done (pull requests #8, #7, #11, #20) |
+| 11 | See pieces I have not worn in 60 days | Dana (logic), Gabriel (outfit), Salome (UI) | Done (pull requests #8, #7, #11, #20) |
+| 14 | Clear messages when a service is down | Gabriel (outfit), Salome (UI) | Done (503 with a clear message, tested in `test_wears.py`) |
+| 15 | Monitoring dashboard | Nikita | Done (queries in `docs/monitoring.md`, pull request #11) |
+| 16 | Service Level Objective | Nikita | Done (SLO and query in `docs/monitoring.md`, pull request #11) |
+| 17 | Project documentation | Everyone, coordinated by Dana | Done |
 
 Not selected: the weather suggestion and its manual fallback (12, 13) and the stretch items (18 to 21). They stay in the backlog for a next sprint.
 
@@ -119,8 +119,42 @@ Endpoints: `POST /items`, `GET /items`, `GET /items/{id}`, `PUT /items/{id}`, `D
 
 ## Sprint Review
 
-To be filled in after the review on 25–26 November: items done and not done.
+Written at the end of the sprint on 24 November. The live demo to the class is on 25–26 November.
+
+The Sprint Goal was met. The MVP is live at the URL in the [README](../../README.md) and every merge to `main` is deployed by the pipeline.
+
+**Done**
+
+- Items 2 to 11 and 14 to 17, including the seven items carried over from Sprint 1 (see the table above)
+- Azure setup as a script, and a CD workflow that pushes images tagged with the commit SHA, deploys both services and the UI, and fails the run if `/health` does not return 200
+- Wardrobe service: versioned migrations on startup and full CRUD on items with validation
+- Outfit service: wear log, cost per wear and items not worn in 60 days, with a 503 and a clear message when wardrobe-service does not answer
+- UI: add, list, edit and delete items, log a wear and see both statistics. Nikita built the first version (pull request #11) and Salome redesigned it and split it into `index.html`, `app.js` and `style.css` (pull request #20)
+- Monitoring: request count, error rate, response time and one SLO as Log Analytics queries, with the frontend and monitoring decision records (Nikita, pull request #11)
+- Documentation: README, decision records, data model, monitoring, sprint notes and `AI_USAGE.md`
+
+**Not done**
+
+- Items 12 and 13 (outfit suggestion from the weather and its manual fallback) were not selected for this sprint and stay in the backlog
+- Stretch items 18 to 21 (smoke test, zero-downtime deploy, rain reminder, color matching) were not started
+
+**Fixed after the first deploy**
+
+- The outfit service did not read the database and wardrobe settings as Azure sets them (`DB_*` and `WARDROBE_URL`). Fixed in pull request #19.
+
+**Next sprint**
+
+1. Outfit suggestion from the weather with the manual cold, mild or hot fallback (items 12 and 13)
+2. Smoke test against the live URL after each deploy (item 18)
+3. Zero-downtime deploy with Container Apps revisions (item 19)
+
+**Changes to the plan**
+
+- The UI was planned as Nikita's area. Nikita delivered the first version, the monitoring queries and the SLO, and Salome took over the UI redesign once the deployment was working.
 
 ## Retrospective agreements
 
-To be filled in after the retrospective.
+- Deploy first. The first deploy to Azure happened on the last day of the sprint, which left little time to fix what only shows up in production. In the next sprint the pipeline runs end to end before any feature work starts.
+- Keep agreeing shared interfaces before coding. Fixing the item and wear shapes at Sprint Planning let five people build in parallel with few conflicts.
+- Spread the work over the whole sprint. Most pull requests were merged in the last 24 hours, so reviews were rushed. We agree on at least one merged pull request per member in the first half of a sprint.
+- Respect the feature freeze. Changes merged after 21:00 are limited to fixes and documentation.
