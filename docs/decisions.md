@@ -107,3 +107,31 @@ duration, and the SLO that 99% of wardrobe `GET /items` requests finish under
   documented.
 - The custom table column names must be confirmed in the target workspace before
   saving the queries.
+
+## 4. Storage and data model
+
+**Date:** 2026-11-24  
+**Owner:** Jinin Aljayyousi
+
+**Context**  
+The brief requires each service to have its own database, a schema defined by versioned migration files applied on startup, SQL Server in compose locally and serverless Azure SQL with auto-pause in production. Tests and CI must never touch the Azure database. A paused serverless database can take up to a minute to answer its first connection.
+
+**Decision**  
+- One database per service: `items` lives in the wardrobe database and `wears` in the outfit database. Locally they are two databases on one SQL Server container, created by a `db-init` step in `docker-compose.yml`.
+- Plain numbered SQL files in `services/<service>/migrations/`, applied in name order on startup and recorded in `dbo.schema_migrations`. A failed migration is rolled back and stops the service from starting.
+- `pyodbc` with Microsoft's ODBC Driver 18 and hand-written, parameterized SQL. No ORM.
+- The connection is built from `DB_HOST`, `DB_NAME`, `DB_USER` and `DB_PASSWORD`, the same variables `infra/setup.sh` sets, always encrypted.
+- Startup retries the connection for about a minute so the CD `/health` check survives a paused database. Each request makes a single attempt and returns a clear 503 if the database is down, instead of hanging.
+- The item rules (category list, warmth 1 to 5, price 0 or more, required name and color) are checked twice: by Pydantic for a clear 422, and by `CHECK` constraints so bad data can never reach the table.
+- `wears.item_id` refers to `items.id` without a foreign key, since the tables are in different databases. See [data-model.md](data-model.md).
+
+**Alternatives**  
+- One shared database for both services (rejected: the brief requires one per service, and it would couple the services).
+- SQLAlchemy with Alembic migrations (rejected: more to learn and review for two small tables, and plain SQL files are easier to read in a pull request).
+- `pymssql` instead of `pyodbc` (no system driver needed, but the outfit service already used `pyodbc`, and one driver for both keeps the Dockerfiles the same).
+
+**Consequences**  
+- The schema is easy to review, and every change is a new migration file.
+- Deleting an item leaves its wears behind. The stats ignore wears for items that no longer exist, so they never show up.
+- The ODBC driver makes the images larger and needs an apt step in each Dockerfile.
+- The first request after the database auto-pauses can take several seconds or return a 503, which the SLO in section 3 excludes as a cold start.
