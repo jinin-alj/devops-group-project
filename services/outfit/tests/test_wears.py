@@ -86,3 +86,23 @@ def test_unworn_stats_return_clear_503_on_timeout(monkeypatch) -> None:
 
     assert response.status_code == 503
     assert response.json()["detail"] == "wardrobe unavailable, try again later"
+
+
+def test_connection_string_is_built_from_db_settings(monkeypatch) -> None:
+    from app.db import build_connection_string
+
+    monkeypatch.setenv("DB_HOST", "sdd.database.windows.net")
+    monkeypatch.setenv("DB_NAME", "sdd-outfit-db")
+    monkeypatch.setenv("DB_USER", "sqladmin")
+    monkeypatch.setenv("DB_PASSWORD", "secret")
+    connection_string = build_connection_string()
+    assert "SERVER=tcp:sdd.database.windows.net,1433;" in connection_string
+    assert "DATABASE=sdd-outfit-db;" in connection_string
+    assert "PWD={secret};" in connection_string
+
+
+def test_no_db_host_means_memory_storage(monkeypatch) -> None:
+    from app.db import build_connection_string
+
+    monkeypatch.delenv("DB_HOST", raising=False)
+    assert build_connection_string() is None

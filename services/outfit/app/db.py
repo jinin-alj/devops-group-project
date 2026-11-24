@@ -83,8 +83,26 @@ def apply_migrations(connection_string: str) -> None:
             connection.commit()
 
 
+def build_connection_string() -> str | None:
+    host = os.environ.get("DB_HOST")
+    if not host:
+        return None
+    password = os.environ["DB_PASSWORD"].replace("}", "}}")
+    trust_certificate = os.environ.get("DB_TRUST_SERVER_CERTIFICATE", "no")
+    return (
+        "DRIVER={ODBC Driver 18 for SQL Server};"
+        f"SERVER=tcp:{host},1433;"
+        f"DATABASE={os.environ['DB_NAME']};"
+        f"UID={os.environ['DB_USER']};"
+        f"PWD={{{password}}};"
+        "Encrypt=yes;"
+        f"TrustServerCertificate={trust_certificate};"
+        "Connection Timeout=30;"
+    )
+
+
 def create_repository() -> WearRepository:
-    connection_string = os.environ.get("DATABASE_URL")
+    connection_string = build_connection_string()
     if not connection_string:
         return MemoryWearRepository()
     if not os.environ.get("SKIP_MIGRATIONS"):
