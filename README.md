@@ -1,47 +1,61 @@
 # DevOps Group Project
 
-A wardrobe app. You add your clothes once (category, color, warmth 1 to 5, price). Each morning it checks the weather and builds an outfit from what you own. You tap "wearing this" to log it, and the app shows cost per wear and which pieces you haven't worn in 60 days.
+A wardrobe app. You add your clothes once (name, category, color, warmth 1 to 5, price). Each time you wear something you tap "wearing this", and the app shows what each piece costs you per wear and which pieces you have not worn in 60 days.
 
 Built as a Scrum team for the Software Development and DevOps group assignment: planned in sprints, delivered by an automated pipeline, deployed on Azure, and monitored in production.
 
 **Live URL:** https://zealous-moss-0723d1803.6.azurestaticapps.net
 
+> The first request after a quiet period can take 20 to 30 seconds. The Container Apps scale to zero and the serverless databases auto-pause, so they have to wake up first.
+
 ## Architecture
 
-Two services, each in its own container with its own database. The UI is a static site that calls both from the browser (CORS restricted to the UI's origin).
+Two services, each in its own container with its own database, talking over HTTP. The UI is a static site that calls both from the browser, with CORS restricted to the UI's origin. This is what runs in the resource group `rg-sdd-3b-g7`:
 
 ```
-Browser (Static Web App: sdd-<class>-g<N>-ui)
-   |                              |
-   v                              v
-wardrobe-service (A)         outfit-service (B) ---> Open-Meteo (weather)
-   |                              |   \
-   v                              |    `--- HTTP ---> wardrobe-service (fetch items)
-Azure SQL serverless (A)     Azure SQL serverless (B)
+                 Browser
+                    |
+                    v
+   Static Web App  sdd-3b-g7-ui  (HTML/JS)
+        |                               |
+        | /items                        | /wears, /stats/*
+        v                               v
+ Container App                   Container App
+ sdd-3b-g7-wardrobe  <--- HTTP ---  sdd-3b-g7-outfit
+        |               GET /items      |
+        |               3 s timeout     |
+        v                               v
+ Serverless Azure SQL            Serverless Azure SQL
+ sdd-3b-g7-wardrobe-db           sdd-3b-g7-outfit-db
+ (items)                         (wears)
+        \                              /
+         +---- both on sdd-3b-g7-sql -+
+
+ Both apps log one line per request to stdout
+   ---> Log Analytics workspace sdd-3b-g7-logs
 ```
 
-| Service | What it does | Database |
-|---------|--------------|----------|
-| wardrobe-service (A) | CRUD for clothing items | items |
-| outfit-service (B) | Wear log, outfit suggestions, cost-per-wear stats. Fetches items from A and calls Open-Meteo | wear log |
+| Service | Endpoints | Database |
+|---------|-----------|----------|
+| wardrobe-service | `GET /health`, `GET /items`, `GET /items/{id}`, `POST /items`, `PUT /items/{id}`, `DELETE /items/{id}` | `items` |
+| outfit-service | `GET /health`, `POST /wears`, `GET /stats/cost-per-wear`, `GET /stats/unworn` | `wears` |
 
-**Why this split:** A is a simple, stable CRUD service. B holds the logic and the external dependencies, so the two can fail independently.
+**Why this split:** wardrobe-service is a small, stable CRUD service that owns the clothes. Outfit-service owns the wear history and the logic built on it, and only reads items from wardrobe-service over HTTP. Each can be deployed and can fail on its own. See [decisions.md](docs/decisions.md) and [data-model.md](docs/data-model.md).
 
 **Partial failure behavior**
 
-- Weather API down: B asks for a manual cold / mild / hot choice.
-- A down: B answers "wardrobe unavailable" after a timeout, with no stack trace and no hung request.
-- B down: A's CRUD keeps working.
-
-Keep this diagram in sync with what is actually deployed on Azure.
+- Wardrobe-service down: the stats endpoints answer 503 `wardrobe unavailable, try again later` within 3 seconds. Logging a wear still works, since outfit-service only stores item ids.
+- After a quiet period, wardrobe-service needs 10 to 20 seconds to wake up, which is longer than that 3-second timeout, so the very first stats request can get the same 503. The UI checks `/health` on both services when the page loads, which wakes them up.
+- Outfit-service down: adding, editing and deleting items keeps working.
+- Wardrobe database down or still waking up: wardrobe-service answers 503 `wardrobe database unavailable, try again later` instead of a stack trace, and `/health` stays up.
 
 ## Tech stack
 
-- Backend: Python + FastAPI (both services)
-- Frontend: plain HTML/JS, static files
+- Backend: Python 3.12 + FastAPI (both services), `pyodbc` with Microsoft ODBC Driver 18, plain SQL migrations
+- Frontend: plain HTML/JS in one static page, service URLs in `ui/config.js`
 - Database: SQL Server in Docker Compose locally, Azure SQL Database serverless in production
-- Containers: Docker, images in GitHub Container Registry
-- CI/CD: GitHub Actions
+- Containers: Docker, images in GitHub Container Registry tagged with the commit SHA
+- CI/CD: GitHub Actions, logging in to Azure with OIDC (no client secret)
 - Hosting: Azure Container Apps (Consumption, scale to zero, max 1 replica) and Azure Static Web Apps
 - Monitoring: Log Analytics workspace of the Container Apps environment
 
@@ -51,88 +65,85 @@ Keep this diagram in sync with what is actually deployed on Azure.
 devops-group-project/
 ├── README.md
 ├── AI_USAGE.md
-├── docker-compose.yml
-├── .gitignore
-├── .env.example
-├── .github/
-│   └── workflows/
-│       ├── ci.yml              # PRs and pushes: lint, format, tests + coverage, image build
-│       └── cd.yml              # merge to main: push images (SHA tag), deploy, migrate, /health check
+├── docker-compose.yml          # SQL Server, db-init, both services, the UI
+├── .env.example                # optional overrides for docker compose
+├── .github/workflows/
+│   ├── ci.yml                  # ruff, format check, tests with 70% coverage, image build
+│   └── cd.yml                  # on merge to main: CI, push images, deploy, /health check, UI
+├── infra/
+│   └── setup.sh                # one-time Azure setup (Azure CLI)
 ├── services/
 │   ├── wardrobe/
 │   │   ├── Dockerfile
-│   │   ├── requirements.txt    # pinned versions
+│   │   ├── requirements.txt        # pinned runtime dependencies
+│   │   ├── requirements-dev.txt    # adds pytest, pytest-cov, ruff
 │   │   ├── app/
-│   │   │   ├── main.py
-│   │   │   ├── routes.py
-│   │   │   ├── logic.py        # core logic (70% coverage target)
-│   │   │   └── db.py
-│   │   ├── migrations/
-│   │   │   └── 001_create_items.sql
+│   │   │   ├── main.py             # endpoints, startup, request logging, CORS
+│   │   │   ├── items.py            # item model and validation
+│   │   │   ├── repository.py       # SQL and in-memory storage
+│   │   │   ├── db.py               # connection from DB_* settings, startup retry
+│   │   │   └── migrations.py       # applies migrations/*.sql once each
+│   │   ├── migrations/001_create_items.sql
 │   │   └── tests/
 │   └── outfit/
 │       ├── Dockerfile
 │       ├── requirements.txt
+│       ├── requirements-dev.txt
 │       ├── app/
-│       │   ├── main.py
-│       │   ├── routes.py
-│       │   ├── scoring.py      # warmth mapping + outfit scoring
-│       │   ├── stats.py        # cost per wear, unworn items
-│       │   ├── clients.py      # calls to wardrobe-service + Open-Meteo, with timeouts
-│       │   └── db.py
-│       ├── migrations/
-│       │   └── 001_create_wear_log.sql
+│       │   ├── main.py             # endpoints, call to wardrobe-service with a timeout
+│       │   ├── stats.py            # cost per wear and unworn items (pure functions)
+│       │   └── db.py               # wear storage and migrations
+│       ├── migrations/001_create_wear_log.sql
 │       └── tests/
 ├── ui/
 │   ├── index.html
-│   ├── app.js
-│   └── style.css
-├── infra/
-│   └── setup.sh                # Azure CLI (or Bicep) for the one-time setup
+│   └── config.js               # service URLs, rewritten by CD for Azure
 └── docs/
-    ├── decisions.md            # 4 to 6 decision records
-    ├── data-model.md           # entities + diagram, matches the migrations
-    ├── monitoring.md           # saved Log Analytics queries + the SLO
-    └── scrum/
-        ├── definition-of-done.md
-        ├── sprint-0.md
-        ├── sprint-1.md
-        └── sprint-2.md
+    ├── decisions.md            # decision records
+    ├── data-model.md           # entities and diagram, matching the migrations
+    ├── monitoring.md           # Log Analytics queries, dashboard and the SLO
+    └── scrum/                  # Definition of Done, backlog, one file per sprint
 ```
 
 ## Run locally
 
-Requires Docker.
+Requires Docker. No `.env` file is needed, the defaults in `docker-compose.yml` work as they are.
 
 ```bash
-git clone https://github.com/<org-or-user>/devops-group-project.git
+git clone https://github.com/salomeshioshvili/devops-group-project.git
 cd devops-group-project
-cp .env.example .env
 docker compose up --build
 ```
 
 | What | URL |
 |------|-----|
+| UI | http://localhost:8080 |
 | wardrobe-service | http://localhost:8001/health |
 | outfit-service | http://localhost:8002/health |
-| UI | http://localhost:8080 |
 
-Migrations are applied automatically on startup.
+SQL Server takes about 30 seconds to start the first time. A `db-init` step then creates the `wardrobe` and `outfit` databases, and each service applies its migrations on startup. Each request writes one line to stdout, for example `method=GET path=/items status=200 duration_ms=4.2`, which you can follow with `docker compose logs -f`.
+
+To change a default, copy `.env.example` to `.env` and edit it. The SQL Server password in compose is only for the local container and is never used in Azure.
 
 ## Run the tests
 
+Requires Python 3.12, the same version as CI and the Docker images. From each service folder:
+
 ```bash
-cd services/wardrobe && pip install -r requirements.txt && pytest --cov=app
-cd services/outfit && pip install -r requirements.txt && pytest --cov=app
+cd services/wardrobe
+python3.12 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/ruff check app tests && .venv/bin/ruff format --check app tests
+.venv/bin/pytest --cov=app --cov-fail-under=70
 ```
 
-CI fails if coverage on the core logic drops below 70%.
+Do the same in `services/outfit`. The tests never need a database: they use in-memory storage and fakes, so they run anywhere, including CI.
 
 ## CI/CD
 
-- **On every pull request and push (CI):** lint, format check, tests with coverage, Docker image build.
-- **On merge to main (CD):** push images tagged with the commit SHA, deploy both services and the UI to Azure only if CI passed, apply migrations, then check `/health` and fail the run if it doesn't return 200 in time.
-- No direct pushes to `main`. Every change goes through a pull request approved by another team member.
+- **CI** (`ci.yml`) runs on every pull request and on pushes to other branches: `ruff check`, `ruff format --check`, the tests with coverage (fails below 70%), and a Docker build of both images.
+- **CD** (`cd.yml`) runs on every merge to `main`: it runs CI first, pushes both images to GHCR tagged with the commit SHA, updates both Container Apps, and checks `/health` on each up to 30 times, 10 seconds apart, failing the run if it never returns 200. Migrations run on startup, so a passing `/health` also means they were applied. It then writes the Azure URLs into `ui/config.js` and deploys the UI to the Static Web App.
+- No direct pushes to `main`. Every change reaches it through a pull request approved by another team member.
 
 ## Reproduce the Azure setup
 
@@ -147,7 +158,7 @@ gh auth login
 CLASS=3b GROUP=7 ./infra/setup.sh
 ```
 
-The script creates the Log Analytics workspace, the Container Apps environment, two Container Apps (Consumption, 0 to 1 replica), a SQL server with two serverless databases (auto-pause after 60 minutes) and the Static Web App. It generates the database password and stores it only as a Container Apps secret.
+The script creates the Log Analytics workspace, the Container Apps environment, two Container Apps (Consumption, 0 to 1 replica), a SQL server with two serverless databases (auto-pause after 60 minutes) and the Static Web App. It generates the database password and stores it only as a Container Apps secret. Each app gets `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` and `ALLOWED_ORIGIN`, and outfit-service also gets `WARDROBE_URL`.
 
 The pipeline identity is the managed identity `sdd-3b-g7-github` (created by the professor). The script adds federated credentials for `main` (name form and numeric-ID form), and sets GitHub variables `AZURE_PREFIX` / `AZURE_RESOURCE_GROUP` plus secrets `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID`. There is no client secret: `azure/login` uses OIDC.
 
@@ -155,82 +166,32 @@ After the first image push, make both GHCR packages public so Azure can pull the
 
 ## Monitoring
 
-Request logs (method, path, status, duration) go to stdout and are queryable in Log Analytics. The dashboard shows request count, error rate and response time. The SLO and the query that measures it are in [docs/monitoring.md](docs/monitoring.md).
+Both services log one line per request to stdout (method, path, status, duration), at INFO level and without request bodies. Container Apps sends these lines to the Log Analytics workspace, where saved queries and the dashboard show request count, error rate and response time.
+
+**SLO:** at least 99% of `GET /items` requests return 2xx in under 500 ms over the previous seven days. The query that measures it is in [docs/monitoring.md](docs/monitoring.md).
+
+## Scope
+
+Built in this project: full CRUD on clothing items, the wear log, cost per wear, items not worn in 60 days, clear messages when a service is down, the pipeline, and monitoring with one SLO.
+
+Not built, and left in the [Product Backlog](docs/scrum/product-backlog.md) for a next sprint: the outfit suggestion from the weather (Open-Meteo) with its manual fallback, the rain reminder and color matching.
 
 ## Documentation
 
 - [Decision records](docs/decisions.md)
 - [Data model](docs/data-model.md)
 - [Monitoring and SLO](docs/monitoring.md)
-- [Scrum: Definition of Done and sprint notes](docs/scrum/)
+- [Definition of Done](docs/scrum/definition-of-done.md) and the notes for [Sprint 0](docs/scrum/sprint-0.md), [Sprint 1](docs/scrum/sprint-1.md) and [Sprint 2](docs/scrum/sprint-2.md)
 - [AI usage](AI_USAGE.md)
 
 ## Team
 
-| Name | GitHub | Sprint 0 | Sprint 1 | Sprint 2 |
-|------|--------|----------|----------|----------|
-| Dana | @danadabbah16 | | | |
-| Salome | @salomeshioshvili | | | |
-| Gabriel | @flipman62 | | | |
-| Nikita | @NikitaDjandjgava | | | |
-| Jinin | @jinin-alj | | | |
+| Name | GitHub | Sprint 0 | Sprint 1 | Sprint 2 | Main area |
+|------|--------|----------|----------|----------|-----------|
+| Dana | [@danadabbah16](https://github.com/danadabbah16) | Product Owner | | Scrum Master | Stats logic, Scrum docs |
+| Gabriel | [@flipman62](https://github.com/flipman62) | Scrum Master | | | Outfit service, CI |
+| Jinin | [@jinin-alj](https://github.com/jinin-alj) | | Product Owner | | Wardrobe service, local skeleton |
+| Nikita | [@NikitaDjandjgava](https://github.com/NikitaDjandjgava) | | Scrum Master | | UI and monitoring |
+| Salome | [@salomeshioshvili](https://github.com/salomeshioshvili) | | | Product Owner | Azure setup and CD |
 
-Roles rotate each sprint (one Product Owner, one Scrum Master, everyone else Developer).
-
----
-
-## What "done" means
-
-### Sprint 0 is done when
-
-- [ ] Team, roles and product idea are decided and recorded in `docs/scrum/sprint-0.md`
-- [ ] Repo created and shared with the professor, with the structure above in place
-- [ ] Branch protection on `main` (pull request + 1 approval, no direct pushes)
-- [ ] GitHub Project set up with the initial backlog as user stories with acceptance criteria
-- [ ] `docs/scrum/definition-of-done.md` written
-- [ ] `docker compose up` from a clean clone brings up both services, and `/health` returns 200 on each
-
-### Sprint 1 is done when
-
-- [ ] Hello World of both services and the UI is deployed to Azure by the pipeline (in the first days of the sprint)
-- [ ] CI runs on every pull request: lint, format check, tests with coverage, image build
-- [ ] CD runs on merge to `main`: images tagged with the commit SHA, deploy, migrations, `/health` check that fails the run if it doesn't return 200
-- [ ] First feature works end to end on the live URL: add a clothing item in the UI and see it persisted
-- [ ] `docs/scrum/sprint-1.md` filled in (goal, items done and not done, retrospective agreements)
-
-### The MVP is done when
-
-- [ ] Wardrobe: full CRUD on clothing items, live
-- [ ] Wear log: "wearing this" is stored by service B
-- [ ] Stats: cost per wear and "not worn in 60 days" show in the UI
-- [ ] Outfit suggestion works from the weather, with the manual fallback when Open-Meteo fails
-- [ ] Partial failure demoed: stop one service and the other keeps working, with a clear message instead of a stack trace
-- [ ] `GET /health` on both services, and one log line per request (method, path, status, duration)
-- [ ] Migrations applied on startup in both services
-- [ ] No secrets in the repo or its history
-- [ ] Coverage is 70% or higher on the core logic of each service
-- [ ] Log Analytics: request logs are queryable, a dashboard or saved queries show request count, error rate and response time, and one SLO has a query that measures it
-- [ ] All docs in place: README, `decisions.md`, `data-model.md`, `docs/scrum/*`, `AI_USAGE.md`
-- [ ] Commit tagged `submission` on `main` and pushed before **24 Nov, 23:59**, with the URL and SHA submitted on Blackboard
-- [ ] Every member has submitted their individual contribution statement
-
-### A single backlog item is done when (Definition of Done)
-
-Copy this into `docs/scrum/definition-of-done.md`.
-
-- [ ] Acceptance criteria met
-- [ ] Merged to `main` through a pull request approved by another team member
-- [ ] CI is green
-- [ ] Deployed to Azure by the pipeline
-- [ ] Tests added for new logic
-- [ ] Docs updated if behavior changed (README, data model, decisions)
-- [ ] `AI_USAGE.md` updated if AI helped
-
-### Cut list if time runs out (in this order)
-
-1. Color scoring in outfit suggestions
-2. Umbrella / rain reminder
-3. "Avoid recently worn items" rule
-4. The outfit suggestion itself, keeping the wear log and cost per wear
-
-Never cut: the deployed pipeline, health checks, monitoring, tests, docs.
+Everyone is a Developer in every sprint. The table shows who also held the Product Owner or Scrum Master role, as recorded in the sprint notes in `docs/scrum/`.
