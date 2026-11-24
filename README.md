@@ -174,7 +174,26 @@ Both services log one line per request to stdout (method, path, status, duration
 
 Built in this project: full CRUD on clothing items, the wear log, cost per wear, items not worn in 60 days, clear messages when a service is down, the pipeline, and monitoring with one SLO.
 
-Not built, and left in the [Product Backlog](docs/scrum/product-backlog.md) for a next sprint: the outfit suggestion from the weather (Open-Meteo) with its manual fallback, the rain reminder and color matching.
+The UI also suggests a next-day outfit from the clothes in the wardrobe. It maps
+the noon forecast to a target warmth rating: 5 at 8°C or below, 4 at 9–14°C, 3
+at 15–20°C, 2 at 21–26°C, and 1 above 26°C. Every pair of suggested pieces
+must have warmth ratings within two points. Compatible outerwear is added for
+the colder warmth targets when available. Warmth fit is the main ranking
+factor; analogous hues (up to 35° apart) and complementary hues (within 25° of
+opposite) improve the color score, while neutral colors work with other hues.
+The selected item colors are shown together as a palette on the recommendation
+card. Among otherwise similar choices, the UI gives a small preference to items
+returned by `GET /stats/unworn`; that endpoint only identifies never-worn items
+and items with no wear in the last 60 days, so the UI cannot compare recency for
+items worn more recently.
+
+For the forecast, the browser asks permission to use its location and requests
+the next-day hourly forecast directly from Open-Meteo. Coordinates are used for
+that request and are not saved by the app. If permission is denied or weather
+is unavailable, the UI explains the issue and uses a neutral warmth target
+rather than claiming a location-specific forecast.
+
+Not built, and left in the [Product Backlog](docs/scrum/product-backlog.md) for a next sprint: a manual weather fallback and rain reminder.
 
 ## Documentation
 

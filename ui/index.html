@@ -60,7 +60,7 @@
             <path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z"/>
             <circle cx="12" cy="10" r="2.5"/>
           </svg>
-          Madrid
+          <span id="location-name">Locating…</span>
         </div>
       </header>
 
@@ -78,11 +78,12 @@
               <p class="message" id="outfit-message" role="status" aria-live="polite"></p>
             </div>
             <div class="outfit-pieces" id="outfit-pieces"></div>
+            <div class="outfit-palette" id="outfit-palette" aria-label="Suggested outfit colour palette"></div>
           </article>
 
           <article class="panel panel-weather">
             <p class="weather-temp" id="home-temp">-°</p>
-            <p class="weather-desc" id="home-weather-copy">Fetching Madrid forecast…</p>
+            <p class="weather-desc" id="home-weather-copy">Requesting browser location for forecast…</p>
             <div class="weather-hours" id="home-hours"></div>
             <a class="linkish" href="#weather" data-view="weather">See full forecast →</a>
           </article>
@@ -104,31 +105,18 @@
               <p class="empty">Loading…</p>
             </div>
           </article>
-
-          <article class="panel panel-upload">
-            <div class="upload-hero">
-              <div class="camera" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 8h3l2-2h6l2 2h3v11H4z"/>
-                  <circle cx="12" cy="13" r="3.5"/>
-                </svg>
-              </div>
-              <h2>Add a piece in seconds</h2>
-              <p>Drop a photo here and Wardrobe will sort out the category and colour for you.</p>
-              <button class="btn-primary" type="button" data-view="add">Upload a photo</button>
-            </div>
-          </article>
         </div>
       </section>
 
       <section class="view" id="view-weather" hidden>
         <article class="page-card">
           <h2>Weather</h2>
-          <p class="view-intro">Madrid forecast from Open-Meteo, used to pick warmer or cooler pieces on Home.</p>
+          <p class="view-intro">Open-Meteo forecast for your browser location. Your browser will ask permission to share your location.</p>
           <p class="weather-temp" id="weather-temp">-°</p>
           <p class="weather-desc" id="weather-copy">Loading forecast…</p>
           <div class="weather-hours" id="weather-hours"></div>
           <p class="message" id="weather-message" role="status"></p>
+          <button class="btn-outline" type="button" id="retry-weather">Refresh location and forecast</button>
         </article>
       </section>
 

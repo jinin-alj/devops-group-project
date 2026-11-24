@@ -3,7 +3,6 @@ const serviceUrls = {
   outfit: window.APP_CONFIG.outfitUrl,
 };
 
-const MADRID = { lat: 40.4168, lon: -3.7038 };
 const requestTimeoutMs = 20000;
 
 const state = {
@@ -12,6 +11,8 @@ const state = {
   outfitIds: [],
   weather: null,
 };
+const itemColorCache = new WeakMap();
+const freshnessCache = new Map();
 
 const els = {
   dateLabel: document.getElementById("date-label"),
@@ -22,7 +23,9 @@ const els = {
   outfitTitle: document.getElementById("outfit-title"),
   outfitCopy: document.getElementById("outfit-copy"),
   outfitPieces: document.getElementById("outfit-pieces"),
+  outfitPalette: document.getElementById("outfit-palette"),
   outfitMessage: document.getElementById("outfit-message"),
+  locationName: document.getElementById("location-name"),
   homeTemp: document.getElementById("home-temp"),
   homeWeatherCopy: document.getElementById("home-weather-copy"),
   homeHours: document.getElementById("home-hours"),
@@ -30,6 +33,7 @@ const els = {
   weatherCopy: document.getElementById("weather-copy"),
   weatherHours: document.getElementById("weather-hours"),
   weatherMessage: document.getElementById("weather-message"),
+  retryWeather: document.getElementById("retry-weather"),
   recentRow: document.getElementById("recent-row"),
   careList: document.getElementById("care-list"),
   itemForm: document.getElementById("item-form"),
@@ -59,7 +63,7 @@ function showView(name) {
   });
   const titles = {
     home: ["Here is what to wear tomorrow.", greetingText()],
-    weather: ["A quick look at Madrid before you choose layers.", "Weather"],
+    weather: ["A local forecast to help you choose layers.", "Weather"],
     add: ["New piece? Drop it in. Takes a minute.", document.getElementById("form-title").textContent],
     clothes: ["Everything you own, in one calm place.", "My clothes"],
   };
@@ -239,38 +243,199 @@ function targetWarmth() {
   return 1;
 }
 
-function pickByCategory(category, warmth) {
-  const pool = state.items.filter((item) => item.category === category);
-  if (!pool.length) return null;
-  return pool
+function colorToHsl(color) {
+  const rgb = colorToRgb(color);
+  if (!rgb) return null;
+  const [red, green, blue] = rgb.map((channel) => channel / 255);
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  const lightness = (max + min) / 2;
+  let hue = 0;
+  let saturation = 0;
+
+  if (delta !== 0) {
+    saturation = delta / (1 - Math.abs(2 * lightness - 1));
+    if (max === red) hue = ((green - blue) / delta) % 6;
+    else if (max === green) hue = (blue - red) / delta + 2;
+    else hue = (red - green) / delta + 4;
+    hue = (hue * 60 + 360) % 360;
+  }
+  return { hue, saturation, lightness };
+}
+
+function itemColorHsl(item) {
+  if (!itemColorCache.has(item)) itemColorCache.set(item, colorToHsl(item.color));
+  return itemColorCache.get(item);
+}
+
+function hueDistance(first, second) {
+  const difference = Math.abs(first - second);
+  return Math.min(difference, 360 - difference);
+}
+
+function colorHarmonyScore(items) {
+  const scores = [];
+  for (let first = 0; first < items.length; first += 1) {
+    for (let second = first + 1; second < items.length; second += 1) {
+      const left = itemColorHsl(items[first]);
+      const right = itemColorHsl(items[second]);
+      if (!left || !right) {
+        scores.push(-0.5);
+        continue;
+      }
+      if (left.saturation < 0.16 || right.saturation < 0.16) {
+        scores.push(0.35);
+        continue;
+      }
+      const distance = hueDistance(left.hue, right.hue);
+      if (distance <= 35) scores.push(1 - distance / 70);
+      else if (distance >= 155) scores.push(1 - Math.abs(180 - distance) / 50);
+      else scores.push(-0.5);
+    }
+  }
+  return scores.length
+    ? scores.reduce((total, score) => total + score, 0) / scores.length
+    : 0;
+}
+
+function freshnessBonus(item) {
+  const id = Number(item.id);
+  if (freshnessCache.has(id)) return freshnessCache.get(id);
+  const record = state.unworn.find((row) => Number(row.item_id) === id);
+  let bonus = 0;
+  if (record && !record.last_worn) bonus = 0.2;
+  else if (record) {
+    const lastWorn = Date.parse(`${record.last_worn}T00:00:00Z`);
+    if (Number.isNaN(lastWorn)) bonus = 0.05;
+    else {
+      const days = Math.max(60, (Date.now() - lastWorn) / 864e5);
+      bonus = 0.05 + Math.min((days - 60) / 365, 1) * 0.15;
+    }
+  }
+  freshnessCache.set(id, bonus);
+  return bonus;
+}
+
+function candidateScore(items, warmth) {
+  const warmthDistance =
+    items.reduce((total, item) => total + Math.abs(item.warmth - warmth), 0) / items.length;
+  const freshness =
+    items.reduce((total, item) => total + freshnessBonus(item), 0) / items.length;
+  return -warmthDistance + colorHarmonyScore(items) * 0.25 + freshness;
+}
+
+function compatibleCombinations(pools) {
+  return pools.reduce(
+    (combinations, pool) =>
+      combinations.flatMap((combination) =>
+        pool
+          .filter((item) => combination.every((piece) => Math.abs(piece.warmth - item.warmth) <= 2))
+          .map((item) => [...combination, item]),
+      ),
+    [[]],
+  );
+}
+
+function poolSubsets(pools, size, start = 0, current = [], result = []) {
+  if (current.length === size) {
+    result.push(current.slice());
+    return result;
+  }
+  for (let index = start; index < pools.length; index += 1) {
+    current.push(pools[index]);
+    poolSubsets(pools, size, index + 1, current, result);
+    current.pop();
+  }
+  return result;
+}
+
+function categoryPool(category, warmth) {
+  return state.items
+    .filter((item) => item.category === category)
     .slice()
     .sort(
-      (a, b) =>
-        Math.abs(a.warmth - warmth) - Math.abs(b.warmth - warmth) || a.id - b.id,
-    )[0];
+      (left, right) =>
+        Math.abs(left.warmth - warmth) -
+          Math.abs(right.warmth - warmth) -
+          (freshnessBonus(left) - freshnessBonus(right)) * 0.25 ||
+        Number(left.id) - Number(right.id),
+    )
+    .slice(0, 12);
+}
+
+function renderOutfitPalette(pieces) {
+  els.outfitPalette.textContent = "";
+  if (!pieces.length) return;
+
+  const label = document.createElement("span");
+  label.className = "palette-label";
+  label.textContent = "Palette";
+  const swatches = document.createElement("div");
+  swatches.className = "palette-swatches";
+  swatches.setAttribute("role", "list");
+  const seen = new Set();
+  pieces.forEach((item) => {
+    const color = colorToRgb(item.color) ? item.color : pastelFor(item);
+    const key = color.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    const swatch = document.createElement("span");
+    swatch.className = "palette-swatch";
+    swatch.style.backgroundColor = color;
+    swatch.title = `${item.name}: ${item.color}`;
+    swatch.setAttribute("role", "listitem");
+    swatch.setAttribute("aria-label", `${item.name}, ${item.color}`);
+    swatches.append(swatch);
+  });
+  els.outfitPalette.append(label, swatches);
 }
 
 function buildOutfit(seed = 0) {
   const warmth = targetWarmth();
-  const rotated = state.items.slice(seed).concat(state.items.slice(0, seed));
-  const previous = state.items;
-  state.items = rotated;
-  const top = pickByCategory("top", warmth);
-  const bottom = pickByCategory("bottom", warmth);
-  const shoes = pickByCategory("shoes", warmth);
-  const outerwear = warmth >= 4 ? pickByCategory("outerwear", warmth) : null;
-  state.items = previous;
+  const categories = ["top", "bottom", "shoes"].filter(
+    (category) => state.items.some((item) => item.category === category),
+  );
+  const pools = categories.map((category) => categoryPool(category, warmth));
+  let candidates = [];
 
-  const pieces = [top, bottom, shoes, outerwear].filter(Boolean);
-  state.outfitIds = pieces.map((item) => item.id);
+  if (!pools.length) {
+    const outerwear = categoryPool("outerwear", warmth);
+    candidates = outerwear.length ? compatibleCombinations([outerwear]) : [];
+  } else {
+    for (let size = pools.length; size > 0; size -= 1) {
+      candidates = poolSubsets(pools, size).flatMap(compatibleCombinations);
+      if (candidates.length) break;
+    }
+  }
+
+  if (pools.length && candidates.length && warmth >= 4) {
+    const outerwear = categoryPool("outerwear", warmth);
+    if (outerwear.length) {
+      const layered = candidates.flatMap((combination) =>
+        outerwear
+          .filter((item) => combination.every((piece) => Math.abs(piece.warmth - item.warmth) <= 2))
+          .map((item) => [...combination, item]),
+      );
+      if (layered.length) candidates = layered;
+    }
+  }
 
   els.outfitPieces.textContent = "";
-  if (!pieces.length) {
-    els.outfitTitle.textContent = "Your closet is waiting";
-    els.outfitCopy.textContent = "Add a few pieces, then come back for an outfit.";
+  if (!candidates.length) {
+    state.outfitIds = [];
+    els.outfitPalette.textContent = "";
+    els.outfitTitle.textContent = state.items.length
+      ? "Still finding a match"
+      : "Your closet is waiting";
+    els.outfitCopy.textContent = state.items.length
+      ? "Add pieces with warmth ratings within two points to build a compatible outfit."
+      : "Add a few pieces, then come back for an outfit.";
     const empty = document.createElement("p");
     empty.className = "empty empty-pieces";
-    empty.textContent = "No items to suggest yet.";
+    empty.textContent = state.items.length
+      ? "No warmth-compatible combination yet."
+      : "No items to suggest yet.";
     els.outfitPieces.append(empty);
     return;
   }
@@ -282,21 +447,27 @@ function buildOutfit(seed = 0) {
     2: "Light, easy, barely thinking about it",
     1: "Keep it cool and simple",
   };
+  candidates.sort((left, right) => candidateScore(right, warmth) - candidateScore(left, warmth));
+  const shortlist = candidates.slice(0, Math.min(5, candidates.length));
+  const pieces = shortlist[Math.abs(Math.trunc(seed)) % shortlist.length];
+  state.outfitIds = pieces.map((item) => item.id);
   els.outfitTitle.textContent = labels[warmth] || labels[3];
   els.outfitCopy.textContent =
     state.weather?.temp != null
-      ? `Soft on top, easy underneath. Made for about ${Math.round(state.weather.temp)}° in Madrid.`
-      : "Something soft on top, easy on the bottom, comfy enough for the walk over.";
+      ? `Picked for about ${Math.round(state.weather.temp)}° near you. The pieces stay within two warmth levels and coordinate by color.`
+      : "Weather is unavailable, so this uses a mild-weather default and coordinates compatible colors.";
 
-  // Outerwear (or the top) becomes the tall hero card on the left.
-  const ordered = [...new Set([outerwear, top, bottom, shoes].filter(Boolean))];
-  ordered.slice(0, 3).forEach((item) => {
+  const categoryOrder = { outerwear: 0, top: 1, bottom: 2, shoes: 3 };
+  const ordered = pieces.slice().sort((left, right) => categoryOrder[left.category] - categoryOrder[right.category]);
+  ordered.forEach((item) => {
     const card = document.createElement("div");
     card.className = "piece-card";
     card.title = item.name;
+    card.setAttribute("aria-label", item.name);
     card.innerHTML = garmentSvg(item.category, item.color);
     els.outfitPieces.append(card);
   });
+  renderOutfitPalette(ordered);
 }
 
 function renderRecent() {
@@ -480,17 +651,21 @@ async function loadStats() {
       request("outfit", "/stats/unworn"),
     ]);
     state.unworn = Array.isArray(unworn) ? unworn : [];
+    freshnessCache.clear();
     renderCostStats(cost);
     renderUnwornStats(state.unworn);
     renderCare();
+    buildOutfit();
   } catch (error) {
     state.unworn = [];
+    freshnessCache.clear();
     renderStatsError(error.message);
     els.careList.textContent = "";
     const p = document.createElement("p");
     p.className = "empty";
     p.textContent = error.message;
     els.careList.append(p);
+    buildOutfit();
   }
 }
 
@@ -498,6 +673,7 @@ async function loadItems() {
   try {
     const items = await request("wardrobe", "/items");
     state.items = Array.isArray(items) ? items : [];
+    freshnessCache.clear();
     renderItems();
     renderRecent();
     buildOutfit();
@@ -655,19 +831,63 @@ function describeBreeze(wind) {
   return "windy";
 }
 
+function getBrowserPosition() {
+  if (!navigator.geolocation) {
+    return Promise.reject(new Error("This browser does not support location access."));
+  }
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      (error) => {
+        const messages = {
+          1: "Location permission was denied. Allow location access in your browser to see the local forecast.",
+          2: "Your location is unavailable. Check device location services and try again.",
+          3: "The location request timed out. Try again.",
+        };
+        reject(new Error(messages[error.code] || "Could not read your browser location."));
+      },
+      { enableHighAccuracy: false, maximumAge: 600000, timeout: 12000 },
+    );
+  });
+}
+
 async function loadWeather() {
-  const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${MADRID.lat}&longitude=${MADRID.lon}` +
-    "&hourly=temperature_2m,weathercode,windspeed_10m&forecast_days=2&timezone=Europe%2FMadrid";
+  els.retryWeather.disabled = true;
+  els.locationName.textContent = "Requesting location…";
+  els.homeWeatherCopy.textContent = "Requesting browser location for forecast…";
+  els.weatherCopy.textContent = "Waiting for location and forecast…";
+  els.homeHours.textContent = "";
+  els.weatherHours.textContent = "";
+  setMessage(els.weatherMessage, "");
+
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`weather failed (${response.status})`);
+    const position = await getBrowserPosition();
+    const params = new URLSearchParams({
+      latitude: String(position.coords.latitude),
+      longitude: String(position.coords.longitude),
+      daily: "weathercode,temperature_2m_max,temperature_2m_min",
+      hourly: "temperature_2m,weathercode,windspeed_10m",
+      forecast_days: "2",
+      timezone: "auto",
+    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+    let response;
+    try {
+      response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, {
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!response.ok) throw new Error(`Open-Meteo request failed (${response.status}).`);
     const data = await response.json();
-    const times = data.hourly.time;
-    const temps = data.hourly.temperature_2m;
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const day = tomorrow.toISOString().slice(0, 10);
+    const times = data.hourly?.time;
+    const temps = data.hourly?.temperature_2m;
+    const day = data.daily?.time?.[1];
+    if (!day || !Array.isArray(times) || !Array.isArray(temps)) {
+      throw new Error("Open-Meteo returned an incomplete forecast.");
+    }
     const labeled = [
       { label: "9am", stamp: "09:00" },
       { label: "12pm", stamp: "12:00" },
@@ -676,32 +896,62 @@ async function loadWeather() {
     ].map((slot) => {
       const index = times.indexOf(`${day}T${slot.stamp}`);
       const temp = index >= 0 ? temps[index] : null;
-      return { label: slot.label, temp: Number.isFinite(temp) ? temp : 0 };
-    });
-    const noon = labeled[1].temp;
-    state.weather = { temp: noon, hours: labeled };
-
+      return Number.isFinite(temp) ? { label: slot.label, temp } : null;
+    }).filter(Boolean);
     const noonIdx = times.indexOf(`${day}T12:00`);
-    const code = noonIdx >= 0 ? data.hourly.weathercode[noonIdx] : null;
-    const wind = noonIdx >= 0 ? data.hourly.windspeed_10m[noonIdx] : null;
+    const dailyHigh = data.daily.temperature_2m_max?.[1];
+    const dailyLow = data.daily.temperature_2m_min?.[1];
+    const noon = noonIdx >= 0 && Number.isFinite(temps[noonIdx])
+      ? temps[noonIdx]
+      : Number.isFinite(dailyHigh) && Number.isFinite(dailyLow)
+        ? (dailyHigh + dailyLow) / 2
+        : null;
+    if (!Number.isFinite(noon)) throw new Error("Open-Meteo returned no temperature for tomorrow.");
+    const code = data.daily.weathercode?.[1] ?? null;
+    const wind = noonIdx >= 0 ? data.hourly.windspeed_10m?.[noonIdx] : null;
     const sky = code == null ? "" : describeSky(code);
     const breeze = describeBreeze(wind);
     const summary = [sky, breeze].filter(Boolean).join(", ") || "Mild day ahead";
+    const forecastDate = new Intl.DateTimeFormat(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(`${day}T12:00:00Z`));
+    state.weather = { temp: noon, date: day, dateLabel: forecastDate, hours: labeled };
+    els.locationName.textContent = "Your location";
 
     els.homeTemp.textContent = `${Math.round(noon)}°`;
     els.homeWeatherCopy.textContent = summary;
     els.weatherTemp.textContent = `${Math.round(noon)}°`;
-    els.weatherCopy.textContent = `Tomorrow in Madrid: ${summary.toLowerCase()}`;
+    const range =
+      Number.isFinite(dailyHigh) && Number.isFinite(dailyLow)
+        ? ` High ${Math.round(dailyHigh)}°, low ${Math.round(dailyLow)}°.`
+        : "";
+    els.weatherCopy.textContent = `${forecastDate} near you: ${summary.toLowerCase()}.${range}`;
     renderHours(els.homeHours, labeled);
     renderHours(els.weatherHours, labeled);
     buildOutfit();
   } catch (error) {
+    state.weather = null;
+    els.locationName.textContent = "Location unavailable";
     els.homeTemp.textContent = "-°";
-    els.homeWeatherCopy.textContent = "Weather unavailable. Outfit uses a mild default.";
-    els.weatherCopy.textContent = error.message;
-    setMessage(els.weatherMessage, "Could not load Open-Meteo. Home still works.", "error");
+    els.weatherTemp.textContent = "-°";
+    els.homeWeatherCopy.textContent = "Local forecast unavailable. Outfit uses a mild-weather default.";
+    const message = error.name === "AbortError"
+      ? "The weather request timed out. Try again."
+      : error.message === "Failed to fetch"
+        ? "Could not reach Open-Meteo. Check your connection and try again."
+        : error.message;
+    els.weatherCopy.textContent = message;
+    setMessage(els.weatherMessage, message, "error");
+    buildOutfit();
+  } finally {
+    els.retryWeather.disabled = false;
   }
 }
+
+els.retryWeather.addEventListener("click", loadWeather);
 
 const today = new Date();
 const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "long" }).format(today);
