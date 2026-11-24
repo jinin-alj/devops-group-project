@@ -3,7 +3,10 @@
 # and the database password is rotated and written to the Container Apps secrets.
 #
 # Usage: CLASS=3b GROUP=7 ./infra/setup.sh
-# Requires: az (logged in with your IE account, IE Workspaces selected) and gh (logged in).
+# Requires: az logged into tenant 5ca2bc70-353c-4d1f-b7d7-7f2b2259df68,
+#           subscription "Azure Simple IE Instituto de Empresa, S.L.", and gh logged in.
+# The managed identity sdd-<class>-g<N>-github is created by the professor; this script
+# only adds federated credentials and the application resources.
 
 set -euo pipefail
 
@@ -18,6 +21,7 @@ SQL_ADMIN="sqladmin"
 ENVIRONMENT="${PREFIX}-env"
 WORKSPACE="${PREFIX}-logs"
 UI="${PREFIX}-ui"
+IDENTITY="${PREFIX}-github"
 # Static Web Apps is only offered in a few regions.
 SWA_LOCATIONS="westeurope westus2 centralus eastus2 eastasia"
 
@@ -25,7 +29,9 @@ exists() { "$@" --only-show-errors >/dev/null 2>&1; }
 
 echo "Checking resource group ${RG}"
 if ! LOCATION=$(az group show --name "$RG" --query location -o tsv 2>/dev/null); then
-  echo "Resource group ${RG} not found or no access. It is created by the professor, not by this script." >&2
+  echo "Resource group ${RG} not found or no access." >&2
+  echo "Log in with: az login --tenant 5ca2bc70-353c-4d1f-b7d7-7f2b2259df68" >&2
+  echo "Then: az account set --subscription \"Azure Simple IE Instituto de Empresa, S.L.\"" >&2
   exit 1
 fi
 echo "Location: ${LOCATION}"
@@ -112,9 +118,47 @@ WARDROBE_URL="https://$(az containerapp show -g "$RG" -n "${PREFIX}-wardrobe" \
   --query properties.configuration.ingress.fqdn -o tsv)"
 upsert_app outfit "WARDROBE_URL=${WARDROBE_URL}"
 
-echo "GitHub variables for the pipeline"
+echo "Federated credentials on managed identity ${IDENTITY}"
+if ! exists az identity show -g "$RG" -n "$IDENTITY"; then
+  echo "Managed identity ${IDENTITY} not found. The professor creates it; do not create it yourself." >&2
+  exit 1
+fi
+
+REPO_SLUG="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
+OWNER="${REPO_SLUG%%/*}"
+REPO_NAME="${REPO_SLUG##*/}"
+OWNER_ID=$(gh api "users/${OWNER}" --jq .id)
+REPO_ID=$(gh api "repos/${REPO_SLUG}" --jq .id)
+SUBJECT_NAME="repo:${REPO_SLUG}:ref:refs/heads/main"
+SUBJECT_IDS="repo:${OWNER}@${OWNER_ID}/${REPO_NAME}@${REPO_ID}:ref:refs/heads/main"
+
+ensure_federated() {
+  local name=$1 subject=$2
+  if exists az identity federated-credential show -g "$RG" --identity-name "$IDENTITY" -n "$name"; then
+    echo "  ${name} already exists"
+  else
+    az identity federated-credential create -g "$RG" --identity-name "$IDENTITY" -n "$name" \
+      --issuer https://token.actions.githubusercontent.com \
+      --subject "$subject" \
+      --audiences api://AzureADTokenExchange \
+      --only-show-errors >/dev/null
+    echo "  created ${name}"
+  fi
+}
+
+ensure_federated github-main "$SUBJECT_NAME"
+ensure_federated github-main-ids "$SUBJECT_IDS"
+
+CLIENT_ID=$(az identity show -g "$RG" -n "$IDENTITY" --query clientId -o tsv)
+TENANT_ID=$(az account show --query tenantId -o tsv)
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+echo "GitHub variables and OIDC secrets for the pipeline"
 gh variable set AZURE_PREFIX --body "$PREFIX"
 gh variable set AZURE_RESOURCE_GROUP --body "$RG"
+gh secret set AZURE_CLIENT_ID --body "$CLIENT_ID"
+gh secret set AZURE_TENANT_ID --body "$TENANT_ID"
+gh secret set AZURE_SUBSCRIPTION_ID --body "$SUBSCRIPTION_ID"
 
 echo
 echo "Done."
@@ -122,3 +166,5 @@ echo "UI:       ${UI_ORIGIN}"
 echo "Wardrobe: ${WARDROBE_URL}"
 echo "Outfit:   https://$(az containerapp show -g "$RG" -n "${PREFIX}-outfit" \
   --query properties.configuration.ingress.fqdn -o tsv)"
+echo
+echo "After the first image push, make both GHCR packages public so Azure can pull them."
