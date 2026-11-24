@@ -2,16 +2,40 @@ import logging
 import os
 import sys
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.db import build_connection_string, open_connection
+from app.migrations import apply_migrations
+
 SERVICE_NAME = "wardrobe"
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, format="%(message)s")
+logger = logging.getLogger(SERVICE_NAME)
 request_logger = logging.getLogger(f"{SERVICE_NAME}.requests")
 
-app = FastAPI(title="wardrobe-service")
+
+def run_migrations(connection_string: str) -> None:
+    connection = open_connection(connection_string)
+    try:
+        apply_migrations(connection)
+    finally:
+        connection.close()
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    connection_string = build_connection_string(dict(os.environ))
+    if connection_string is None:
+        logger.warning("DB_HOST is not set, so no migrations were run")
+    else:
+        run_migrations(connection_string)
+    yield
+
+
+app = FastAPI(title="wardrobe-service", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.environ.get("ALLOWED_ORIGIN", "http://localhost:8080")],
