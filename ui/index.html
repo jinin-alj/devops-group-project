@@ -4,32 +4,814 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wardrobe</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #64708a;
+      --surface: #ffffff;
+      --surface-rgb: 255, 255, 255;
+      --surface-alpha: .91;
+      --background: #f3f6fb;
+      --line: #dce3ef;
+      --primary: #3659c9;
+      --primary-dark: #28449e;
+      --sidebar: #17264f;
+      --sidebar-muted: #c6d1ed;
+      --danger: #b42318;
+      --success: #147d52;
+      --radius: 14px;
+      --space: 1.25rem;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --ink: #e7ecf6;
+        --muted: #aab5cb;
+        --surface: #202a3b;
+        --surface-rgb: 32, 42, 59;
+        --surface-alpha: .91;
+        --background: #111827;
+        --line: #39465d;
+        --primary: #6684ee;
+        --primary-dark: #536fce;
+        --sidebar: #0c1425;
+        --sidebar-muted: #aab8d8;
+        --danger: #ffaaa3;
+        --success: #78d6a8;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--background); }
+    button, input, select { font: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid #8da7ff;
+      outline-offset: 2px;
+    }
+    .app-shell { min-height: 100vh; display: grid; grid-template-columns: 250px minmax(0, 1fr); }
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 1.5rem 1rem;
+      color: white;
+      background-color: var(--sidebar);
+      background-image:
+        radial-gradient(145% 54% at 0% 8%, #00b9ce 0%, transparent 68%),
+        radial-gradient(135% 58% at 100% 26%, #e83ed1 0%, transparent 70%),
+        radial-gradient(120% 52% at 3% 92%, #bb26d0 0%, transparent 69%),
+        linear-gradient(155deg, #1689d0 8%, #ed547e 47%, #ff633b 65%, #ed1d67 79%, #9823c2 100%);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: 1.1rem;
+      padding: .7rem .6rem;
+      border: 1px solid #ffffff30;
+      border-radius: 14px;
+      background: #0c1425c7;
+    }
+    .brand-mark {
+      display: grid;
+      width: 2.5rem;
+      height: 2.5rem;
+      place-items: center;
+      border-radius: 12px;
+      background: #6f8cff;
+      font-size: 1.3rem;
+      font-weight: 800;
+    }
+    .brand strong, .brand span { display: block; }
+    .brand span { margin-top: .15rem; color: var(--sidebar-muted); font-size: .8rem; }
+    .nav-list { display: grid; gap: .4rem; }
+    .nav-button {
+      width: 100%;
+      padding: .8rem .85rem;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      color: #ffffff;
+      background: #0c1425bd;
+      text-align: left;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .nav-button:hover { color: white; background: #0c1425df; }
+    .nav-button[aria-current="page"] {
+      border-color: #ffffff20;
+      color: white;
+      background: #0c1425ed;
+    }
+    .service-status {
+      display: grid;
+      gap: .5rem;
+      margin-top: auto;
+      padding: 1rem .65rem;
+      border: 1px solid #ffffff30;
+      border-radius: 14px;
+      background: #0c1425c7;
+    }
+    .service-status h2 { margin: 0 0 .25rem; color: #e4e9f8; font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; }
+    .pill { width: fit-content; padding: .3rem .6rem; border-radius: 999px; color: #ffffff; background: #0c1425d9; font-size: .82rem; }
+    .pill.up { color: #d8ffeb; background: #075b3ee8; }
+    .pill.down { color: #ffe3e0; background: #711e25ed; }
+    .app-content {
+      min-width: 0;
+      background-color: var(--background);
+      background-image:
+        radial-gradient(ellipse at 88% 8%, rgba(232, 62, 209, .18), transparent 34rem),
+        radial-gradient(ellipse at 8% 42%, rgba(0, 185, 206, .14), transparent 30rem),
+        radial-gradient(ellipse at 82% 94%, rgba(255, 99, 59, .12), transparent 32rem);
+    }
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 2rem clamp(1.25rem, 4vw, 3.5rem) 1.5rem;
+      border-bottom: 1px solid var(--line);
+      background: rgba(var(--surface-rgb), var(--surface-alpha));
+    }
+    .page-header h1 { margin: .2rem 0; font-size: clamp(1.65rem, 3vw, 2.1rem); }
+    .page-header p { margin: .35rem 0 0; color: var(--muted); }
+    .eyebrow { color: var(--primary); font-size: .75rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+    .today-date { flex: none; color: var(--muted); font-size: .9rem; }
+    main { max-width: 1200px; margin: 0 auto; padding: clamp(1rem, 3vw, 2.5rem); }
+    .view[hidden] { display: none; }
+    .view-intro { margin: 0 0 1.25rem; color: var(--muted); }
+    .card {
+      padding: clamp(1rem, 2vw, 1.5rem);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(var(--surface-rgb), var(--surface-alpha));
+      box-shadow: 0 8px 26px #1720330a;
+    }
+    .card h2 { margin: 0 0 .65rem; font-size: 1.15rem; }
+    .card p { line-height: 1.55; }
+    .home-grid, .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space); }
+    .recommendation-card {
+      min-height: 230px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: linear-gradient(135deg, rgba(var(--surface-rgb), var(--surface-alpha)) 30%, #3659c912);
+    }
+    .recommendation-mark { color: var(--primary); font-size: 2rem; }
+    .weather-card { max-width: 720px; padding: clamp(1.5rem, 5vw, 3rem); }
+    .weather-icon { margin-bottom: .5rem; font-size: 2.5rem; }
+    .weather-card h2 { font-size: 1.5rem; }
+    .form-card { max-width: 720px; }
+    form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem 1rem; }
+    .field { min-width: 0; }
+    .field.full-width { grid-column: 1 / -1; }
+    label { display: block; font-weight: 650; }
+    input, select {
+      width: 100%;
+      margin-top: .4rem;
+      padding: .7rem .75rem;
+      border: 1px solid #aebbd1;
+      border-radius: 9px;
+      color: var(--ink);
+      background: var(--surface);
+    }
+    input[type="color"] { width: 4.5rem; height: 3rem; padding: .25rem; cursor: pointer; }
+    .color-control { display: flex; align-items: center; gap: .8rem; }
+    .color-hex { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .color-preview {
+      display: flex;
+      align-items: center;
+      min-height: 3.25rem;
+      margin-top: .75rem;
+      padding: .75rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font-weight: 700;
+    }
+    .actions { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; margin-top: 1rem; }
+    button.action {
+      border: 0;
+      border-radius: 9px;
+      padding: .7rem .95rem;
+      color: white;
+      background: var(--primary);
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.action:hover { background: var(--primary-dark); }
+    button.secondary { border: 1px solid var(--line); border-radius: 8px; padding: .55rem .75rem; color: var(--primary); background: var(--surface); font-weight: 650; cursor: pointer; }
+    button.danger { border: 1px solid #b4231840; border-radius: 8px; padding: .55rem .75rem; color: var(--danger); background: var(--surface); font-weight: 650; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .message { min-height: 1.5rem; margin: .6rem 0 0; color: var(--muted); }
+    .message.error { color: var(--danger); }
+    .message.success { color: var(--success); }
+    .empty { color: var(--muted); }
+    .items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; margin: 0; padding: 0; list-style: none; }
+    .item {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: .65rem;
+      padding: .65rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .item-select { width: 1.15rem; height: 1.15rem; margin: 0; accent-color: var(--primary); }
+    .item-color-card {
+      min-width: 0;
+      grid-column: 2;
+      padding: .9rem;
+      border-radius: 9px;
+      overflow-wrap: anywhere;
+    }
+    .item-color-card strong, .item-color-card span { display: block; }
+    .item-color-card span { margin-top: .25rem; font-size: .83rem; opacity: .9; }
+    .item-actions { grid-column: 2; display: flex; flex-wrap: wrap; gap: .45rem; }
+    .wear-controls { display: grid; grid-template-columns: minmax(180px, 250px) auto; align-items: end; gap: .8rem; margin-top: 1rem; }
+    .stats { margin-top: var(--space); }
+    .stats table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th, td { padding: .6rem .35rem; border-bottom: 1px solid var(--line); text-align: left; }
+    th { color: var(--muted); font-size: .8rem; }
+
+    @media (max-width: 900px) {
+      .app-shell { grid-template-columns: 210px minmax(0, 1fr); }
+      .items { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      .app-shell { display: block; }
+      .sidebar { position: static; width: 100%; height: auto; padding: .8rem 1rem; }
+      .brand { margin-bottom: .7rem; padding: .55rem; }
+      .nav-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem; }
+      .nav-button { width: 100%; min-width: 0; padding: .65rem .5rem; text-align: center; }
+      .service-status { display: flex; flex-wrap: wrap; margin-top: .7rem; padding: .5rem .25rem 0; border-top: 1px solid #ffffff20; }
+      .service-status h2 { width: 100%; }
+      .page-header { align-items: flex-start; padding: 1.25rem; }
+      .today-date { max-width: 8rem; text-align: right; }
+      main { padding: 1rem; }
+      .home-grid, .stats { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 420px) {
+      form { grid-template-columns: 1fr; }
+      .field.full-width { grid-column: auto; }
+      .wear-controls { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .nav-button, button { transition: background-color .15s ease, color .15s ease; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Wardrobe</h1>
-  <ul>
-    <li>wardrobe-service: <span id="wardrobe-status">checking...</span></li>
-    <li>outfit-service: <span id="outfit-status">checking...</span></li>
-  </ul>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">W</div>
+        <div><strong>Wardrobe</strong><span>Your everyday closet</span></div>
+      </div>
+      <nav class="nav-list" aria-label="Main menu">
+        <button class="nav-button" type="button" data-view="home" aria-controls="view-home" aria-current="page">Home</button>
+        <button class="nav-button" type="button" data-view="weather" aria-controls="view-weather">Weather</button>
+        <button class="nav-button" type="button" data-view="add" aria-controls="view-add">Add an item</button>
+        <button class="nav-button" type="button" data-view="clothes" aria-controls="view-clothes">My clothes</button>
+      </nav>
+      <section class="service-status" aria-label="Service status">
+        <h2>Services</h2>
+        <span class="pill" id="wardrobe-status" role="status">Wardrobe: checking...</span>
+        <span class="pill" id="outfit-status" role="status">Outfit: checking...</span>
+      </section>
+    </aside>
+
+    <div class="app-content">
+      <header class="page-header">
+        <div>
+          <div class="eyebrow">Wardrobe manager</div>
+          <h1 id="page-title">Home</h1>
+          <p id="page-description">A little inspiration for getting dressed today.</p>
+        </div>
+        <div class="today-date">Today<br><time id="today-date"></time></div>
+      </header>
+      <main>
+        <section class="view" id="view-home" aria-labelledby="page-title">
+          <div class="home-grid">
+            <article class="card recommendation-card">
+              <div>
+                <div class="recommendation-mark" aria-hidden="true">*</div>
+                <h2>Recommended outfits</h2>
+                <p id="recommendation-status" role="status" aria-live="polite">
+                  Outfit recommendations are not available yet because no recommendation endpoint is connected.
+                </p>
+              </div>
+              <div class="actions">
+                <button class="action" type="button" data-go-to="clothes">View my clothes</button>
+                <button class="secondary" type="button" data-go-to="add">Add an item</button>
+              </div>
+            </article>
+            <article class="card">
+              <div class="eyebrow">Your closet</div>
+              <h2>Wear what you love</h2>
+              <p>Keep your pieces in one place, log what you wear, and see how often each item earns its keep.</p>
+              <button class="secondary" type="button" data-go-to="weather">Check today's weather</button>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-weather" aria-labelledby="page-title" hidden>
+          <article class="card weather-card">
+            <div class="weather-icon" aria-hidden="true">Weather</div>
+            <div class="eyebrow">Today's forecast</div>
+            <h2 id="forecast-date"></h2>
+            <p id="weather-status" role="status" aria-live="polite">
+              Today's forecast is unavailable because no weather endpoint is connected to the UI yet.
+            </p>
+          </article>
+        </section>
+
+        <section class="view" id="view-add" aria-labelledby="page-title" hidden>
+          <article class="card form-card">
+            <h2 id="form-title">Add an item</h2>
+            <p class="view-intro">Add the details so you can keep your closet up to date.</p>
+            <form id="item-form">
+              <input id="item-id" type="hidden">
+              <div class="field full-width">
+                <label for="item-name">Name</label>
+                <input id="item-name" name="name" required maxlength="120" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="item-category">Category</label>
+                <select id="item-category" name="category" required>
+                  <option value="top">Top</option>
+                  <option value="bottom">Bottom</option>
+                  <option value="shoes">Shoes</option>
+                  <option value="outerwear">Outerwear</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="item-color">Color</label>
+                <div class="color-control">
+                  <input id="item-color" name="color" type="color" value="#6684ee" required>
+                  <output class="color-hex" id="color-hex" for="item-color">#6684EE</output>
+                </div>
+                <div class="color-preview" id="color-preview">Item color preview</div>
+              </div>
+              <div class="field">
+                <label for="item-warmth">Warmth (1-5)</label>
+                <input id="item-warmth" name="warmth" type="number" min="1" max="5" value="3" required>
+              </div>
+              <div class="field">
+                <label for="item-price">Price</label>
+                <input id="item-price" name="price" type="number" min="0" step="0.01" value="0" required>
+              </div>
+              <div class="field full-width">
+                <div class="actions">
+                  <button class="action" type="submit" id="save-item">Add item</button>
+                  <button class="secondary" type="button" id="cancel-edit" hidden>Cancel edit</button>
+                </div>
+                <p class="message" id="item-message" role="status" aria-live="polite"></p>
+              </div>
+            </form>
+          </article>
+        </section>
+
+        <section class="view" id="view-clothes" aria-labelledby="page-title" hidden>
+          <section class="card" aria-labelledby="items-title">
+            <h2 id="items-title">My clothes</h2>
+            <p class="view-intro">Select the pieces you wore and log them for today or another date.</p>
+            <ul class="items" id="items-list"></ul>
+            <p class="empty" id="items-empty">Loading items...</p>
+            <div class="wear-controls">
+              <div class="field">
+                <label for="worn-on">Worn on</label>
+                <input id="worn-on" type="date">
+              </div>
+              <button class="action" type="button" id="wear-button">Wearing this</button>
+            </div>
+            <p class="message" id="wear-message" role="status" aria-live="polite"></p>
+          </section>
+
+          <section class="stats" aria-label="Wardrobe statistics">
+            <article class="card">
+              <h2>Cost per wear</h2>
+              <div id="cost-stats"><p class="empty">Loading stats...</p></div>
+            </article>
+            <article class="card">
+              <h2>Not worn in 60 days</h2>
+              <div id="unworn-stats"><p class="empty">Loading stats...</p></div>
+            </article>
+          </section>
+        </section>
+      </main>
+    </div>
+  </div>
   <script src="config.js"></script>
   <script>
     const serviceUrls = {
       wardrobe: window.APP_CONFIG.wardrobeUrl,
       outfit: window.APP_CONFIG.outfitUrl,
     };
+    const state = { items: [] };
+    const requestTimeoutMs = 5000;
+    const elements = {
+      pageTitle: document.getElementById("page-title"),
+      pageDescription: document.getElementById("page-description"),
+      todayDate: document.getElementById("today-date"),
+      forecastDate: document.getElementById("forecast-date"),
+      colorInput: document.getElementById("item-color"),
+      colorHex: document.getElementById("color-hex"),
+      colorPreview: document.getElementById("color-preview"),
+      itemForm: document.getElementById("item-form"),
+      itemId: document.getElementById("item-id"),
+      itemMessage: document.getElementById("item-message"),
+      itemsList: document.getElementById("items-list"),
+      itemsEmpty: document.getElementById("items-empty"),
+      saveItem: document.getElementById("save-item"),
+      cancelEdit: document.getElementById("cancel-edit"),
+      wornOn: document.getElementById("worn-on"),
+      wearButton: document.getElementById("wear-button"),
+      wearMessage: document.getElementById("wear-message"),
+      costStats: document.getElementById("cost-stats"),
+      unwornStats: document.getElementById("unworn-stats"),
+    };
+    const viewDetails = {
+      home: ["Home", "A little inspiration for getting dressed today."],
+      weather: ["Weather", "Check the forecast before you choose what to wear."],
+      add: ["Add an item", "Add a new piece to your closet."],
+      clothes: ["My clothes", "Your items, wear log, and wardrobe stats."],
+    };
 
-    async function showHealth(serviceName) {
-      const statusElement = document.getElementById(`${serviceName}-status`);
+    function showView(name) {
+      document.querySelectorAll(".view").forEach((view) => {
+        view.hidden = view.id !== `view-${name}`;
+      });
+      document.querySelectorAll(".nav-button").forEach((button) => {
+        if (button.dataset.view === name) {
+          button.setAttribute("aria-current", "page");
+        } else {
+          button.removeAttribute("aria-current");
+        }
+      });
+      elements.pageTitle.textContent = viewDetails[name][0];
+      elements.pageDescription.textContent = viewDetails[name][1];
+    }
+
+    document.querySelectorAll(".nav-button").forEach((button) => {
+      button.addEventListener("click", () => showView(button.dataset.view));
+    });
+    document.querySelectorAll("[data-go-to]").forEach((button) => {
+      button.addEventListener("click", () => showView(button.dataset.goTo));
+    });
+
+    function colorToRgb(color) {
+      const probe = document.createElement("span");
+      probe.style.color = color;
+      if (!probe.style.color) return null;
+      document.body.append(probe);
+      const normalized = getComputedStyle(probe).color;
+      probe.remove();
+      const channels = normalized.match(/[\d.]+/g);
+      return channels && channels.length >= 3 ? channels.slice(0, 3).map(Number) : null;
+    }
+
+    function contrastTextColor(color) {
+      const channels = colorToRgb(color);
+      if (!channels) return "#172033";
+      const linear = channels.map((channel) => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+      return luminance > 0.179 ? "#172033" : "#ffffff";
+    }
+
+    function rgbToHex(channels) {
+      return `#${channels.map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("")}`;
+    }
+
+    function updateColorPreview() {
+      const color = elements.colorInput.value;
+      elements.colorHex.textContent = color.toUpperCase();
+      elements.colorPreview.style.backgroundColor = color;
+      elements.colorPreview.style.color = contrastTextColor(color);
+      elements.colorPreview.textContent =
+        document.getElementById("item-name").value.trim() || "Item color preview";
+    }
+
+    function setMessage(element, message, type = "") {
+      element.textContent = message;
+      element.className = `message ${type}`.trim();
+    }
+
+    async function request(service, path, options = {}) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
       try {
-        const response = await fetch(`${serviceUrls[serviceName]}/health`);
-        statusElement.textContent = response.ok ? "up" : `error ${response.status}`;
+        const response = await fetch(`${serviceUrls[service]}${path}`, {
+          ...options,
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          let detail = "";
+          try { detail = (await response.json()).detail || ""; } catch (error) { /* non-JSON error */ }
+          if (response.status === 404 && detail === "Not Found") {
+            const apiError = new Error(
+              `${service} API route ${path} is not available yet (404). The service is reachable.`,
+            );
+            apiError.status = response.status;
+            throw apiError;
+          }
+          if (response.status === 404) {
+            const apiError = new Error(detail || "item not found (404)");
+            apiError.status = response.status;
+            throw apiError;
+          }
+          if (response.status === 422) {
+            const apiError = new Error(detail || "please check the submitted values (422)");
+            apiError.status = response.status;
+            throw apiError;
+          }
+          const apiError = new Error(detail || `request failed (${response.status})`);
+          apiError.status = response.status;
+          throw apiError;
+        }
+        return response.status === 204 ? null : response.json();
       } catch (error) {
-        statusElement.textContent = "unreachable";
+        if (error.name === "AbortError") {
+          throw new Error(`${service} service timed out. Please try again.`);
+        }
+        if (error.status) {
+          throw new Error(`${service} service: ${error.message}`);
+        }
+        throw new Error(`${service} service is unavailable. Please try again.`);
+      } finally {
+        clearTimeout(timeout);
       }
     }
 
-    showHealth("wardrobe");
-    showHealth("outfit");
+    async function showHealth(service) {
+      const element = document.getElementById(`${service}-status`);
+      try {
+        await request(service, "/health");
+        element.textContent = `${service === "wardrobe" ? "Wardrobe" : "Outfit"}: up`;
+        element.className = "pill up";
+      } catch (error) {
+        element.textContent = `${service === "wardrobe" ? "Wardrobe" : "Outfit"}: down`;
+        element.className = "pill down";
+      }
+    }
+
+    function formatItem(item) {
+      return `${item.color}, ${item.category}, warmth ${item.warmth}, €${Number(item.price).toFixed(2)}`;
+    }
+
+    function renderItems() {
+      elements.itemsList.textContent = "";
+      elements.itemsEmpty.hidden = state.items.length > 0;
+      elements.itemsEmpty.textContent = state.items.length ? "" : "No items yet. Add your first item.";
+      state.items.forEach((item) => {
+        const row = document.createElement("li");
+        row.className = "item";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "item-select";
+        checkbox.id = `item-${item.id}`;
+        checkbox.dataset.itemId = item.id;
+        checkbox.setAttribute("aria-label", `Select ${item.name}`);
+        const info = document.createElement("div");
+        info.className = "item-color-card";
+        const parsedColor = colorToRgb(item.color);
+        info.style.backgroundColor = parsedColor ? item.color : "#e8edfb";
+        info.style.color = contrastTextColor(item.color);
+        const name = document.createElement("strong");
+        name.textContent = item.name;
+        const details = document.createElement("span");
+        details.textContent = formatItem(item);
+        info.append(name, details);
+        const actions = document.createElement("div");
+        actions.className = "item-actions";
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "secondary";
+        edit.textContent = "Edit";
+        edit.addEventListener("click", () => startEdit(item));
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "danger";
+        remove.textContent = "Delete";
+        remove.addEventListener("click", () => deleteItem(item));
+        actions.append(edit, remove);
+        row.append(checkbox, info, actions);
+        elements.itemsList.append(row);
+      });
+    }
+
+    async function loadItems() {
+      try {
+        const items = await request("wardrobe", "/items");
+        state.items = Array.isArray(items) ? items : [];
+        renderItems();
+        await loadStats();
+      } catch (error) {
+        state.items = [];
+        renderItems();
+        elements.itemsEmpty.textContent = error.message;
+        setMessage(elements.itemMessage, error.message, "error");
+        renderStatsError(error.message);
+      }
+    }
+
+    function startEdit(item) {
+      elements.itemId.value = item.id;
+      document.getElementById("item-name").value = item.name;
+      document.getElementById("item-category").value = item.category;
+      elements.colorInput.value = rgbToHex(colorToRgb(item.color) || [102, 132, 238]);
+      document.getElementById("item-warmth").value = item.warmth;
+      document.getElementById("item-price").value = item.price;
+      document.getElementById("form-title").textContent = "Edit item";
+      elements.saveItem.textContent = "Save changes";
+      elements.cancelEdit.hidden = false;
+      showView("add");
+      elements.pageTitle.textContent = "Edit an item";
+      elements.pageDescription.textContent = "Update the details of this closet item.";
+      updateColorPreview();
+      document.getElementById("item-name").focus();
+    }
+
+    function resetForm() {
+      elements.itemForm.reset();
+      elements.itemId.value = "";
+      document.getElementById("form-title").textContent = "Add an item";
+      elements.saveItem.textContent = "Add item";
+      elements.cancelEdit.hidden = true;
+      elements.pageTitle.textContent = viewDetails.add[0];
+      elements.pageDescription.textContent = viewDetails.add[1];
+      updateColorPreview();
+    }
+
+    function itemPayload() {
+      return {
+        name: document.getElementById("item-name").value.trim(),
+        category: document.getElementById("item-category").value,
+        color: elements.colorInput.value,
+        warmth: Number(document.getElementById("item-warmth").value),
+        price: Number(document.getElementById("item-price").value),
+      };
+    }
+
+    elements.itemForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const id = elements.itemId.value;
+      try {
+        await request("wardrobe", id ? `/items/${id}` : "/items", {
+          method: id ? "PUT" : "POST",
+          body: JSON.stringify(itemPayload()),
+        });
+        setMessage(elements.itemMessage, id ? "Item updated." : "Item added.", "success");
+        resetForm();
+        await loadItems();
+      } catch (error) {
+        setMessage(elements.itemMessage, error.message, "error");
+      }
+    });
+
+    elements.cancelEdit.addEventListener("click", resetForm);
+    elements.colorInput.addEventListener("input", updateColorPreview);
+    document.getElementById("item-name").addEventListener("input", updateColorPreview);
+
+    async function deleteItem(item) {
+      if (!window.confirm(`Delete ${item.name}?`)) return;
+      try {
+        await request("wardrobe", `/items/${item.id}`, { method: "DELETE" });
+        setMessage(elements.itemMessage, `${item.name} deleted.`, "success");
+        await loadItems();
+      } catch (error) {
+        setMessage(elements.itemMessage, error.message, "error");
+      }
+    }
+
+    function selectedIds() {
+      return [...elements.itemsList.querySelectorAll("input[type=checkbox]:checked")]
+        .map((checkbox) => Number(checkbox.dataset.itemId));
+    }
+
+    elements.wearButton.addEventListener("click", async () => {
+      const itemIds = selectedIds();
+      if (!itemIds.length) {
+        setMessage(elements.wearMessage, "Select at least one item first.", "error");
+        return;
+      }
+      const payload = { item_ids: itemIds };
+      if (elements.wornOn.value) payload.worn_on = elements.wornOn.value;
+      try {
+        await request("outfit", "/wears", { method: "POST", body: JSON.stringify(payload) });
+        setMessage(elements.wearMessage, "Wear logged.", "success");
+        await loadStats();
+      } catch (error) {
+        setMessage(elements.wearMessage, error.message, "error");
+      }
+    });
+
+    function itemName(id) {
+      const item = state.items.find((candidate) => candidate.id === id);
+      return item ? item.name : `Item #${id}`;
+    }
+
+    function renderStatsError(message) {
+      elements.costStats.textContent = "";
+      elements.unwornStats.textContent = "";
+      const costError = document.createElement("p");
+      costError.className = "empty";
+      costError.textContent = message;
+      const unwornError = document.createElement("p");
+      unwornError.className = "empty";
+      unwornError.textContent = message;
+      elements.costStats.append(costError);
+      elements.unwornStats.append(unwornError);
+    }
+
+    function renderCostStats(rows) {
+      if (!rows.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty";
+        empty.textContent = "No items to report.";
+        elements.costStats.textContent = "";
+        elements.costStats.append(empty);
+        return;
+      }
+      const table = document.createElement("table");
+      const head = document.createElement("thead");
+      const headingRow = document.createElement("tr");
+      ["Item", "Wears", "Cost/wear"].forEach((value) => {
+        const heading = document.createElement("th");
+        heading.textContent = value;
+        headingRow.append(heading);
+      });
+      head.append(headingRow);
+      table.append(head);
+      const body = document.createElement("tbody");
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        [itemName(row.item_id), row.wears, `€${Number(row.cost_per_wear).toFixed(2)}`]
+          .forEach((value) => { const td = document.createElement("td"); td.textContent = value; tr.append(td); });
+        body.append(tr);
+      });
+      table.append(body);
+      elements.costStats.textContent = "";
+      elements.costStats.append(table);
+    }
+
+    function renderUnwornStats(rows) {
+      elements.unwornStats.textContent = "";
+      if (!rows.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty";
+        empty.textContent = "Everything has been worn recently.";
+        elements.unwornStats.append(empty);
+        return;
+      }
+      const list = document.createElement("ul");
+      rows.forEach((row) => {
+        const item = document.createElement("li");
+        item.textContent = `${itemName(row.item_id)} (${row.last_worn || "never worn"})`;
+        list.append(item);
+      });
+      elements.unwornStats.append(list);
+    }
+
+    async function loadStats() {
+      try {
+        const [cost, unworn] = await Promise.all([
+          request("outfit", "/stats/cost-per-wear"),
+          request("outfit", "/stats/unworn"),
+        ]);
+        renderCostStats(cost);
+        renderUnwornStats(unworn);
+      } catch (error) {
+        renderStatsError(error.message);
+      }
+    }
+
+    const today = new Date();
+    const formattedToday = new Intl.DateTimeFormat(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }).format(today);
+    elements.todayDate.textContent = formattedToday;
+    elements.forecastDate.textContent = formattedToday;
+    elements.wornOn.value = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, "0"),
+      String(today.getDate()).padStart(2, "0"),
+    ].join("-");
+    updateColorPreview();
+    Promise.all(["wardrobe", "outfit"].map(showHealth));
+    loadItems();
+    loadStats();
   </script>
 </body>
 </html>

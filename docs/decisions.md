@@ -45,3 +45,65 @@ The brief requires a one-time Azure setup that is scripted or written as IaC, th
 - Anyone with access can reproduce the Azure setup from a clean machine.
 - The first image push may need the GHCR packages set to public so Azure can pull them without a registry password.
 - If `azure/login` fails with `AADSTS700213`, compare the subject in the error with the federated credentials and add the missing form.
+
+## 2. Frontend: static browser UI
+
+**Date:** 2026-11-24
+**Owner:** Nikita
+
+**Context**
+The product needs item CRUD, wear logging, and outfit statistics while remaining
+deployable as plain files from Azure Static Web Apps. The browser must continue
+to call both services directly and show a useful message when either service is
+unavailable.
+
+**Decision**
+Keep the UI as a static `index.html` that loads the existing `config.js`
+contract. Use the Fetch API with a five-second timeout, `textContent` for
+service-provided values, and independent loading/error states for wardrobe and
+outfit features. Use four client-side sections for Home, Weather, Add an item,
+and My clothes. Keep recommendation and forecast states explicit until those
+service endpoints are available. Store the selected clothing color as a hex
+string and choose foreground text by luminance for readable item swatches.
+Keep the UI dependency-free and responsive, with CSS custom properties for the
+theme and a system dark-mode variant.
+
+**Alternatives**
+- Add a frontend framework and build step (rejected: unnecessary for this
+  product and conflicts with the static deployment contract).
+- Proxy both APIs through the UI host (rejected: adds infrastructure and hides
+  the independently-failing service boundary).
+
+**Consequences**
+- The UI can be deployed without installing frontend dependencies.
+- API validation and service errors are surfaced as friendly messages.
+- The browser still depends on correctly configured CORS and the CD-generated
+  Azure URLs.
+
+## 3. Monitoring: stdout request metrics and one SLO
+
+**Date:** 2026-11-24
+**Owner:** Nikita
+
+**Context**
+The rubric requires request count, error rate, response-time percentiles, and
+one measurable SLO for the two Container Apps without adding another service.
+
+**Decision**
+Use the existing one-line request logs from both services and save KQL queries
+over `ContainerAppConsoleLogs_CL` for request count, 5xx error rate, p50/p95
+duration, and the SLO that 99% of wardrobe `GET /items` requests finish under
+500 ms over seven days.
+
+**Alternatives**
+- Add application metrics or a third monitoring agent (rejected: out of scope
+  and increases operational complexity).
+- Measure only availability checks (rejected: health checks do not represent
+  user request latency).
+
+**Consequences**
+- The queries are low-volume and use data already emitted by the services.
+- The SLO excludes ingress and scale-to-zero cold-start time; those caveats are
+  documented.
+- The custom table column names must be confirmed in the target workspace before
+  saving the queries.
