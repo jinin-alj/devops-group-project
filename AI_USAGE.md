@@ -6,3 +6,6 @@ One row per significant piece of AI-assisted work, including workflows, Dockerfi
 |------|--------|------|----------------------|-------|--------------------|
 | 2026-11-23 | Dana (@danadabbah16) | Claude | Drafted the cost-per-wear and unworn-items functions and their unit tests | `services/outfit/app/stats.py`, `services/outfit/tests/test_stats.py` | Read and reviewed the code |
 | 2026-11-23 | Dana (@danadabbah16) | Claude | Drafted the Sprint 1 notes from the repository history | `docs/scrum/sprint-1.md` | Checked against the merged pull requests and the Product Backlog |
+| 2026-11-10 | Jinin (@jinin-alj) | Claude | Helped set up the Sprint 0 skeleton | `services/`, `docker-compose.yml`, `ui/index.html` | Reviewed and adjusted the code, ran the tests and `docker compose up` |
+| 2026-11-24 | Jinin (@jinin-alj) | Claude | Helped write the wardrobe database layer, migrations and items CRUD with their tests | `services/wardrobe/`, `docker-compose.yml` | Reviewed and edited the code, ran the tests and checked the endpoints against SQL Server locally |
+| 2026-11-24 | Jinin (@jinin-alj) | Claude | Helped draft the data model page and the storage decision record | `docs/data-model.md`, `docs/decisions.md` | Checked against the migration files |
