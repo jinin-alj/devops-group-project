@@ -4,7 +4,7 @@ A wardrobe app. You add your clothes once (category, color, warmth 1 to 5, price
 
 Built as a Scrum team for the Software Development and DevOps group assignment: planned in sprints, delivered by an automated pipeline, deployed on Azure, and monitored in production.
 
-**Live URL:** `TODO (add after the first deploy)`
+**Live URL:** https://zealous-moss-0723d1803.6.azurestaticapps.net
 
 ## Architecture
 
@@ -136,14 +136,22 @@ CI fails if coverage on the core logic drops below 70%.
 
 ## Reproduce the Azure setup
 
-Everything lives in the group's resource group, `rg-sdd-<class>-g<N>`, and every resource name starts with the prefix `sdd-<class>-g<N>`.
+Everything lives in the group's resource group `rg-sdd-3b-g7`, in the subscription **Azure Simple IE Instituto de Empresa, S.L.** (tenant `5ca2bc70-353c-4d1f-b7d7-7f2b2259df68`). Resource names start with `sdd-3b-g7-`.
+
+One-time setup, run by a team member with Contributor on the resource group:
 
 ```bash
-az login
-./infra/setup.sh
+az login --tenant 5ca2bc70-353c-4d1f-b7d7-7f2b2259df68
+az account set --subscription "Azure Simple IE Instituto de Empresa, S.L."
+gh auth login
+CLASS=3b GROUP=7 ./infra/setup.sh
 ```
 
-This creates two Container Apps, two serverless SQL databases (auto-pause) and one Static Web App. Configuration goes through environment variables and GitHub secrets only. No secrets are stored in the repo.
+The script creates the Log Analytics workspace, the Container Apps environment, two Container Apps (Consumption, 0 to 1 replica), a SQL server with two serverless databases (auto-pause after 60 minutes) and the Static Web App. It generates the database password and stores it only as a Container Apps secret.
+
+The pipeline identity is the managed identity `sdd-3b-g7-github` (created by the professor). The script adds federated credentials for `main` (name form and numeric-ID form), and sets GitHub variables `AZURE_PREFIX` / `AZURE_RESOURCE_GROUP` plus secrets `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID`. There is no client secret: `azure/login` uses OIDC.
+
+After the first image push, make both GHCR packages public so Azure can pull them. Then every merge to `main` deploys through `.github/workflows/cd.yml`. Nothing is changed by hand in Azure.
 
 ## Monitoring
 
