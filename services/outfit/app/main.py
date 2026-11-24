@@ -15,10 +15,7 @@ from app.db import WearRepository, create_repository
 from app.stats import cost_per_wear, unworn_items
 
 SERVICE_NAME = "outfit"
-WARDROBE_SERVICE_URL = os.environ.get(
-    "WARDROBE_SERVICE_URL",
-    "http://wardrobe:8000",
-)
+WARDROBE_URL = os.environ.get("WARDROBE_URL", "http://wardrobe:8000")
 WARDROBE_TIMEOUT_SECONDS = 3.0
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, format="%(message)s")
@@ -94,7 +91,7 @@ def log_wears(wear: WearRequest) -> dict:
 async def fetch_wardrobe_items() -> list[dict[str, Any]]:
     try:
         async with httpx.AsyncClient(timeout=WARDROBE_TIMEOUT_SECONDS) as client:
-            response = await client.get(f"{WARDROBE_SERVICE_URL}/items")
+            response = await client.get(f"{WARDROBE_URL}/items")
             response.raise_for_status()
             items = response.json()
     except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as error:

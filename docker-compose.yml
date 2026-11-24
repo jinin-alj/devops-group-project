@@ -52,8 +52,12 @@ services:
         condition: service_completed_successfully
     environment:
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:8080}
-      WARDROBE_SERVICE_URL: http://wardrobe:8000
-      DATABASE_URL: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=sqlserver,1433;DATABASE=outfit;UID=sa;PWD=${MSSQL_SA_PASSWORD:-LocalDevPassword123!};Encrypt=no"
+      WARDROBE_URL: http://wardrobe:8000
+      DB_HOST: sqlserver
+      DB_NAME: outfit
+      DB_USER: sa
+      DB_PASSWORD: ${MSSQL_SA_PASSWORD:-LocalDevPassword123!}
+      DB_TRUST_SERVER_CERTIFICATE: "yes"
 
   ui:
     image: nginxinc/nginx-unprivileged:1.27-alpine
