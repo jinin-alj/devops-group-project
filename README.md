@@ -52,7 +52,7 @@ Two services, each in its own container with its own database, talking over HTTP
 ## Tech stack
 
 - Backend: Python 3.12 + FastAPI (both services), `pyodbc` with Microsoft ODBC Driver 18, plain SQL migrations
-- Frontend: plain HTML/JS in one static page, service URLs in `ui/config.js`
+- Frontend: plain HTML, CSS and JS as static files, service URLs in `ui/config.js`
 - Database: SQL Server in Docker Compose locally, Azure SQL Database serverless in production
 - Containers: Docker, images in GitHub Container Registry tagged with the commit SHA
 - CI/CD: GitHub Actions, logging in to Azure with OIDC (no client secret)
@@ -97,6 +97,8 @@ devops-group-project/
 │       └── tests/
 ├── ui/
 │   ├── index.html
+│   ├── app.js                  # UI logic and calls to both services
+│   ├── style.css
 │   └── config.js               # service URLs, rewritten by CD for Azure
 └── docs/
     ├── decisions.md            # decision records
@@ -183,6 +185,7 @@ Not built, and left in the [Product Backlog](docs/scrum/product-backlog.md) for 
 - [Monitoring and SLO](docs/monitoring.md)
 - [Definition of Done](docs/scrum/definition-of-done.md) and the notes for [Sprint 0](docs/scrum/sprint-0.md), [Sprint 1](docs/scrum/sprint-1.md) and [Sprint 2](docs/scrum/sprint-2.md)
 - [AI usage](AI_USAGE.md)
+- [End-to-end test checklist](docs/e2e-checklist.md)
 
 ## Team
 
@@ -191,7 +194,7 @@ Not built, and left in the [Product Backlog](docs/scrum/product-backlog.md) for 
 | Dana | [@danadabbah16](https://github.com/danadabbah16) | Product Owner | | Scrum Master | Stats logic, Scrum docs |
 | Gabriel | [@flipman62](https://github.com/flipman62) | Scrum Master | | | Outfit service, CI |
 | Jinin | [@jinin-alj](https://github.com/jinin-alj) | | Product Owner | | Wardrobe service, local skeleton |
-| Nikita | [@NikitaDjandjgava](https://github.com/NikitaDjandjgava) | | Scrum Master | | UI and monitoring |
-| Salome | [@salomeshioshvili](https://github.com/salomeshioshvili) | | | Product Owner | Azure setup and CD |
+| Nikita | [@NikitaDjandjgava](https://github.com/NikitaDjandjgava) | | Scrum Master | | First UI version, monitoring. |
+| Salome | [@salomeshioshvili](https://github.com/salomeshioshvili) | | | Product Owner | zure setup and CD to Azure setup, CD, UI redesign |
 
 Everyone is a Developer in every sprint. The table shows who also held the Product Owner or Scrum Master role, as recorded in the sprint notes in `docs/scrum/`.
