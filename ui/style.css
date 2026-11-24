@@ -252,7 +252,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 
 .home-bottom {
   display: grid;
-  grid-template-columns: 1fr 1.05fr;
+  grid-template-columns: 1fr;
   gap: 1rem;
 }
 
@@ -293,14 +293,6 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   display: flex;
   flex-direction: column;
 }
-.panel-upload {
-  background: #fdf6f6;
-  border: 1.5px dashed #e8b9c0;
-  box-shadow: none;
-  display: flex;
-  flex-direction: column;
-}
-
 .panel h2 {
   margin: 0;
   font-family: var(--serif);
@@ -342,6 +334,27 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   gap: 0.75rem;
   margin: 0;
   min-height: 12rem;
+}
+
+.outfit-palette {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 1.7rem;
+}
+.palette-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+.palette-swatches { display: flex; gap: 0.35rem; }
+.palette-swatch {
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(80, 55, 45, 0.2);
 }
 
 .piece-card {
@@ -608,37 +621,6 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   padding: 0.4rem 0.8rem;
   font-size: 0.76rem;
 }
-
-/* Upload card */
-.upload-hero {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  gap: 0.15rem;
-}
-.upload-hero .camera {
-  width: 2.4rem;
-  height: 2.4rem;
-  display: grid;
-  place-items: center;
-  margin-bottom: 0.55rem;
-  border-radius: 0.8rem;
-  background: #f9d9dc;
-  color: var(--maroon);
-}
-.upload-hero .camera svg { width: 1.15rem; height: 1.15rem; }
-.upload-hero h2 { margin: 0 0 0.3rem; font-size: 1.3rem; }
-.upload-hero p {
-  max-width: 24rem;
-  margin: 0 auto;
-  color: var(--muted);
-  font-size: 0.9rem;
-  line-height: 1.4;
-}
-.upload-hero .btn-primary { margin-top: 0.85rem; }
 
 .message {
   min-height: 0;
