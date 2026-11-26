@@ -735,6 +735,8 @@ function renderCare() {
   });
 }
 
+const ITEM_TYPE = { top: "Top", bottom: "Bottom", dress: "Dress", shoes: "Shoes", outerwear: "Outerwear" };
+
 function renderItems() {
   els.itemsList.textContent = "";
   els.itemsEmpty.hidden = state.items.length > 0;
@@ -742,35 +744,70 @@ function renderItems() {
   state.items.forEach((item) => {
     const row = document.createElement("li");
     row.className = "item";
+
+    // the whole card is the label, so tapping anywhere on it selects the piece
+    const pick = document.createElement("label");
+    pick.className = "item-pick";
+    const tile = document.createElement("span");
+    tile.className = "item-tile";
+    tile.style.background = tileBackground(item);
+    tile.innerHTML = garmentSvg(item);
+
+    const text = document.createElement("span");
+    text.className = "item-text";
+    const name = document.createElement("strong");
+    name.className = "item-name";
+    name.textContent = item.name;
+    const meta = document.createElement("span");
+    meta.className = "item-meta";
+    meta.textContent = `${ITEM_TYPE[item.category] || item.category}, €${Number(item.price).toFixed(2)}`;
+    text.append(name, meta, warmthScale(item.warmth));
+
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
+    checkbox.className = "item-check";
     checkbox.dataset.itemId = item.id;
     checkbox.setAttribute("aria-label", `Select ${item.name}`);
-    const body = document.createElement("div");
-    body.className = "item-body";
-    body.style.backgroundColor = colorToRgb(item.color) ? item.color : pastelFor(item);
-    body.style.color = contrastTextColor(item.color);
-    const name = document.createElement("strong");
-    name.textContent = item.name;
-    const details = document.createElement("span");
-    details.textContent = `${item.category}, warmth ${item.warmth}, €${Number(item.price).toFixed(2)}`;
-    body.append(name, details);
+    pick.append(tile, text, checkbox);
+
     const actions = document.createElement("div");
     actions.className = "item-actions";
     const edit = document.createElement("button");
     edit.type = "button";
-    edit.className = "btn-ghost";
+    edit.className = "item-link";
     edit.textContent = "Edit";
+    edit.setAttribute("aria-label", `Edit ${item.name}`);
     edit.addEventListener("click", () => startEdit(item));
     const remove = document.createElement("button");
     remove.type = "button";
-    remove.className = "btn-danger";
+    remove.className = "item-link danger";
     remove.textContent = "Delete";
+    remove.setAttribute("aria-label", `Delete ${item.name}`);
     remove.addEventListener("click", () => deleteItem(item));
     actions.append(edit, remove);
-    row.append(checkbox, body, actions);
+
+    row.append(pick, actions);
     els.itemsList.append(row);
   });
+}
+
+// dots plus the words, so warmth doesn't rely on colour alone
+function warmthScale(warmth) {
+  const level = Math.min(5, Math.max(1, Number(warmth) || 1));
+  const scale = document.createElement("span");
+  scale.className = "item-warmth";
+  const dots = document.createElement("span");
+  dots.className = "warmth-dots";
+  dots.setAttribute("aria-hidden", "true");
+  for (let step = 1; step <= 5; step += 1) {
+    const dot = document.createElement("span");
+    dot.className = step <= level ? "warmth-dot on" : "warmth-dot";
+    dots.append(dot);
+  }
+  const words = document.createElement("span");
+  words.textContent = `Warmth ${level} of 5`;
+  scale.append(dots, words);
+  return scale;
 }
 
 function itemName(id) {
