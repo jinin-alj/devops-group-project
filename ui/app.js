@@ -102,15 +102,18 @@ function colorToRgb(color) {
   return channels && channels.length >= 3 ? channels.slice(0, 3).map(Number) : null;
 }
 
-function contrastTextColor(color) {
-  const channels = colorToRgb(color);
-  if (!channels) return "#2a2420";
+function relativeLuminance(channels) {
   const linear = channels.map((channel) => {
     const value = channel / 255;
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
   });
-  const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
-  return luminance > 0.179 ? "#2a2420" : "#fffaf6";
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+function contrastTextColor(color) {
+  const channels = colorToRgb(color);
+  if (!channels) return "#2a2420";
+  return relativeLuminance(channels) > 0.179 ? "#2a2420" : "#fffaf6";
 }
 
 function rgbToHex(channels) {
@@ -149,23 +152,217 @@ function categoryLabel(category) {
   );
 }
 
-function garmentSvg(category, fill) {
-  const color = fill || "#8f3d3d";
-  const key = String(category || "top").toLowerCase();
-  const shapes = {
-    top: `<path d="M8 6.5 12 4.5l4 2 2.5-1.2L21 8.5l-2.2 1.7V19.5H5.2V10.2L3 8.5l2.5-3.2z" fill="${color}"/>
-      <path d="M9.2 8.2h5.6v2.1H9.2z" fill="#fff" opacity=".28"/>`,
-    bottom: `<path d="M8 4.5h8l-.7 15H12.7L12 11.5l-.7 8H8.7z" fill="${color}"/>
-      <path d="M9.2 6.2h5.6" stroke="#fff" stroke-width="1.2" opacity=".35"/>`,
-    dress: `<path d="M10 3.5h4l1 6 3.5 10.5h-13L9 9.5z" fill="${color}"/>`,
-    shoes: `<path d="M3.5 11.2c2-1.4 3.8-3.2 6.8-3.2h6.2c2 0 3.5 1.5 3.5 3.4v2.2H3.5z" fill="${color}"/>
-      <path d="M5.2 13.6h13.2" stroke="#fff" stroke-width="1.1" opacity=".35"/>
-      <path d="M4.2 13.6v2.8c0 .7.6 1.2 1.2 1.2h1.4c.6 0 1.1-.5 1.1-1.2v-.6h8.4v.6c0 .7.5 1.2 1.1 1.2h1.4c.7 0 1.2-.5 1.2-1.2v-2.8" fill="none" stroke="${color}" stroke-width="1.4"/>`,
-    outerwear: `<path d="M7.5 6.2 12 4l4.5 2.2 2.8-1L22 8.2l-2.4 1.5V20H4.4V9.7L2 8.2l2.7-3z" fill="${color}"/>
-      <path d="M12 7.2V20" stroke="#fff" stroke-width="1.3" opacity=".35"/>`,
+const WHITE = [255, 255, 255];
+const BLACK = [0, 0, 0];
+const INK = [44, 36, 31];
+
+function mixRgb(from, to, amount) {
+  return from.map((channel, index) => channel + (to[index] - channel) * amount);
+}
+
+// Details and the tile both flip for very dark or very light items, otherwise a black boot or a white tee disappears.
+function garmentColors(color) {
+  const rgb = colorToRgb(color) || [143, 61, 61];
+  const light = relativeLuminance(rgb);
+  const dark = light < 0.08;
+  let tile = mixRgb(rgb, WHITE, 0.8);
+  if (light > 0.7) tile = mixRgb(rgb, INK, 0.2);
+  else if (dark) tile = mixRgb(rgb, WHITE, 0.9);
+  return {
+    fill: rgbToHex(rgb),
+    shade: rgbToHex(mixRgb(rgb, dark ? WHITE : BLACK, 0.16)),
+    detail: rgbToHex(mixRgb(rgb, dark ? WHITE : BLACK, 0.42)),
+    outline: rgbToHex(mixRgb(rgb, BLACK, light > 0.5 ? 0.55 : 0.5)),
+    tile: rgbToHex(tile),
   };
-  const body = shapes[key] || shapes.top;
-  return `<span class="garment" aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">${body}</svg></span>`;
+}
+
+function tileBackground(item) {
+  return garmentColors(item.color).tile;
+}
+
+// Warmth picks the drawing, so a warmth 1 top is a tank top and a warmth 5 top is a jumper.
+const GARMENT_STYLES = {
+  top: ["tank", "tee", "knit"],
+  bottom: ["shorts", "trousers", "cargo"],
+  shoes: ["sandal", "trainer", "boot"],
+  outerwear: ["bomber", "jacket", "coat"],
+};
+
+function garmentStyle(item) {
+  const category = String(item.category || "").toLowerCase();
+  const styles = GARMENT_STYLES[category];
+  if (!styles) return category === "dress" ? "dress" : "tee";
+  const warmth = Number(item.warmth) || 3;
+  if (warmth <= 2) return styles[0];
+  return warmth === 3 ? styles[1] : styles[2];
+}
+
+function drawingKit(c) {
+  return {
+    c,
+    body: (d) => `<path d="${d}" fill="${c.fill}" stroke="${c.outline}" stroke-width="1.6" stroke-linejoin="round"/>`,
+    band: (d) => `<path d="${d}" fill="${c.shade}" stroke="${c.outline}" stroke-width="1.1" stroke-linejoin="round"/>`,
+    shade: (d) => `<path d="${d}" fill="${c.shade}" opacity=".6"/>`,
+    line: (d, width = 1.3, opacity = 1) =>
+      `<path d="${d}" fill="none" stroke="${c.detail}" stroke-width="${width}" stroke-linecap="round" opacity="${opacity}"/>`,
+    stitch: (d) =>
+      `<path d="${d}" fill="none" stroke="${c.detail}" stroke-width="1" stroke-dasharray="2 2.2" stroke-linecap="round"/>`,
+    dot: (x, y, r = 1.7) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${c.detail}"/>`,
+    loops: (d) => `<path d="${d}" stroke="${c.outline}" stroke-width="2.2"/>`,
+    // little vertical ticks along a curved hem, which is what makes a cuff read as knitted
+    rib: (x1, x2, y0, depth, height) => {
+      let d = "";
+      for (let x = x1 + 3; x < x2 - 1; x += 3.4) {
+        const t = (x - x1) / (x2 - x1);
+        d += `M${x.toFixed(1)} ${(y0 + 2 * t * (1 - t) * depth + 1).toFixed(1)}v${height - 2}`;
+      }
+      return `<path d="${d}" fill="none" stroke="${c.detail}" stroke-width=".8" opacity=".7"/>`;
+    },
+  };
+}
+
+// All drawings share a 100 by 100 box so every tile can size them the same way.
+const DRAWINGS = {
+  tank: (k) =>
+    k.body("M37 10 L42 10 Q50 30 58 10 L63 10 Q63 28 76 36 L76 88 Q50 93 24 88 L24 36 Q37 28 37 10 Z") +
+    k.shade("M70 36.5 Q73.5 35.5 76 36 L76 88 Q73 88.6 70 89 Z") +
+    k.stitch("M43.6 11.5 Q50 26.5 56.4 11.5") +
+    k.stitch("M38.6 13 Q38.8 27.5 26 34.6") +
+    k.stitch("M61.4 13 Q61.2 27.5 74 34.6") +
+    k.stitch("M25.5 84.6 Q50 89.3 74.5 84.6"),
+  tee: (k) =>
+    k.body("M38 14 Q50 24 62 14 L79 21 L93 40 L79 49 L75 43 L75 88 Q50 92.5 25 88 L25 43 L21 49 L7 40 L21 21 Z") +
+    k.shade("M70 43 L75 43 L75 88 Q72.5 88.5 70 88.8 Z") +
+    k.band("M38 14 Q50 24 62 14 Q50 28.5 38 14 Z") +
+    k.stitch("M10.2 37.6 L22.8 46") +
+    k.stitch("M89.8 37.6 L77.2 46") +
+    k.stitch("M25.6 84.4 Q50 89 74.4 84.4"),
+  knit: (k) =>
+    k.body("M38 14 Q50 22 62 14 L77 19 Q86 23 88 33 L94 79 L82 81 L76 46 L76 88 Q50 92.5 24 88 L24 46 L18 81 L6 79 L12 33 Q14 23 23 19 Z") +
+    k.band("M38 14 Q50 22 62 14 Q50 27 38 14 Z") +
+    k.band("M6.7 73 L18.7 75.2 L18 81 L6 79 Z") +
+    k.band("M93.3 73 L81.3 75.2 L82 81 L94 79 Z") +
+    k.band("M24 82 Q50 86.5 76 82 L76 88 Q50 92.5 24 88 Z") +
+    k.rib(24, 76, 82, 4.5, 6) +
+    k.line("M45 30 C41 35 49 39 45 44 C41 49 49 53 45 58 C41 63 49 67 45 72", 1.3, 0.65) +
+    k.line("M55 30 C59 35 51 39 55 44 C59 49 51 53 55 58 C59 63 51 67 55 72", 1.3, 0.65),
+  shorts: (k) =>
+    k.body("M27 18 L73 18 L77 66 L54 68 L50 42 L46 68 L23 66 Z") +
+    k.band("M27 18 L73 18 L73.6 25 L26.4 25 Z") +
+    k.loops("M35 17v9M65 17v9") +
+    k.line("M50 25 L50 41") +
+    k.stitch("M53.5 25.5 L53.5 35 Q53.5 39 50.5 40") +
+    k.line("M29.5 26 Q36 30 34 37.5") +
+    k.line("M70.5 26 Q64 30 66 37.5") +
+    k.stitch("M24.4 62.2 L46.5 64.2") +
+    k.stitch("M53.5 64.2 L75.6 62.2"),
+  trousers: (k) =>
+    k.body("M30 8 L70 8 L77 94 L56 94 L50 34 L44 94 L23 94 Z") +
+    k.band("M30 8 L70 8 L70.6 15 L29.4 15 Z") +
+    k.loops("M37 7v9M63 7v9") +
+    k.line("M50 15 L50 33") +
+    k.stitch("M53.5 15.5 L53.5 27 Q53.5 30.5 50.5 31.5") +
+    k.line("M32 16 Q38.5 20 36 27") +
+    k.line("M68 16 Q61.5 20 64 27") +
+    k.line("M37.5 30 L34 92", 1.1, 0.45) +
+    k.line("M62.5 30 L66 92", 1.1, 0.45),
+  cargo: (k) =>
+    k.body("M30 8 L70 8 L77 94 L56 94 L50 34 L44 94 L23 94 Z") +
+    k.band("M30 8 L70 8 L70.6 15 L29.4 15 Z") +
+    k.loops("M37 7v9M63 7v9") +
+    k.line("M50 15 L50 33") +
+    k.line("M32 16 Q38.5 20 36 27") +
+    k.line("M68 16 Q61.5 20 64 27") +
+    `<path d="M27.6 50 L38.4 50 L38.4 63 L27.6 63 Z M61.6 50 L72.4 50 L72.4 63 L61.6 63 Z" fill="${k.c.fill}" stroke="${k.c.detail}" stroke-width="1.1"/>` +
+    k.band("M27.2 47.5 L38.8 47.5 L38.8 52.5 L27.2 52.5 Z") +
+    k.band("M61.2 47.5 L72.8 47.5 L72.8 52.5 L61.2 52.5 Z") +
+    k.band("M23.5 87.5 L44.6 87.5 L44 94 L23 94 Z") +
+    k.band("M55.4 87.5 L76.5 87.5 L77 94 L56 94 Z"),
+  sandal: (k) =>
+    '<path d="M10 70 Q10 64 17 64 L84 64 Q92 64 92 70 L92 72 Q92 77 86 77 L16 77 Q10 77 10 72 Z" fill="#cfb38d" stroke="#7d6248" stroke-width="1.4"/>' +
+    '<path d="M12 70.5 H90" stroke="#a88a64" stroke-width="1"/>' +
+    `<path d="M19.5 64 Q19 52.5 31 52 L48 55.5" fill="none" stroke="${k.c.outline}" stroke-width="5.8" stroke-linecap="round"/>` +
+    `<path d="M19.5 64 Q19 52.5 31 52 L48 55.5" fill="none" stroke="${k.c.fill}" stroke-width="3.6" stroke-linecap="round"/>` +
+    k.body("M41 64 Q44 49 61 48 Q80 49 83 64 Z") +
+    k.line("M46.5 57.5 Q61 52.5 78 57.5", 1.2, 0.6) +
+    k.stitch("M44 61.5 Q61 57 80.5 61.5") +
+    `<rect x="27.5" y="48.8" width="5" height="6.4" rx="1" fill="${k.c.shade}" stroke="${k.c.outline}" stroke-width="1.2"/>`,
+  trainer: (k) =>
+    '<path d="M12 68 L90 68 Q93 68 93 71.5 L93 73 Q93 78 88 78 L17 78 Q12 78 12 73 Z" fill="#f6f2ec" stroke="#9a8f86" stroke-width="1.4"/>' +
+    '<path d="M14 72.8 H91" stroke="#d8cfc4" stroke-width="1"/>' +
+    k.body("M14 68 L14 46 Q14 40 20 39 L32 39 Q38 49 52 52 L70 54 Q87 56 89 68 Z") +
+    k.band("M72 54.3 Q87 56 89 68 L74 68 Q72 61 72 54.3 Z") +
+    k.band("M14 46 Q14 40 20 39 L21.5 39 L21.5 68 L14 68 Z") +
+    k.line("M24 68 Q28 57 44 56") +
+    k.line("M38.5 45.5 L42 50.5", 1.6) +
+    k.line("M44 48.5 L46.8 53", 1.6) +
+    k.line("M49.6 50.6 L51.8 54.8", 1.6) +
+    k.stitch("M23 41.5 Q25 46 32 47"),
+  boot: (k) =>
+    '<path d="M18 80 L91 80 L91 87 Q91 89 89 89 L20 89 Q18 89 18 87 Z" fill="#3d332d" stroke="#241d19" stroke-width="1.4"/>' +
+    '<path d="M36 80v9M47 85.5h40" stroke="#5c5049" stroke-width="1"/>' +
+    k.body("M20 80 L20 18 Q20 12 26 12 L44 12 Q48 12 48 17 L48 47 Q52 54 66 56 Q87 58 89 71 L89 80 Z") +
+    k.band("M20 18 Q20 12 26 12 L44 12 Q48 12 48 17 L48 21 L20 21 Z") +
+    k.band("M70 56.6 Q87 58 89 71 L89 73 L74 73 Q71 64 70 56.6 Z") +
+    k.line("M42.5 26 L47.5 29.5M42.5 29.5 L47.5 26M42.5 34 L47.5 37.5M42.5 37.5 L47.5 34M42.5 42 L47.5 45.5M42.5 45.5 L47.5 42", 1.2) +
+    k.stitch("M21.5 76.8 H87.5") +
+    `<path d="M20 14 Q14 14 14 19.5 Q14 25 20 25" fill="none" stroke="${k.c.outline}" stroke-width="1.6"/>`,
+  bomber: (k) =>
+    k.body("M36 14 L64 14 L79 20 Q87 24 89 34 L95 78 L83 80 L77 46 L77 84 L23 84 L23 46 L17 80 L5 78 L11 34 Q13 24 21 20 Z") +
+    k.band("M36 14 Q50 21 64 14 L64.5 18.5 Q50 25.5 35.5 18.5 Z") +
+    k.band("M23 78 L77 78 L77 84 L23 84 Z") +
+    k.rib(23, 77, 78, 0, 6) +
+    k.band("M5.7 72.5 L17.7 74.5 L17 80 L5 78 Z") +
+    k.band("M94.3 72.5 L82.3 74.5 L83 80 L95 78 Z") +
+    `<path d="M50 22 V78" stroke="${k.c.outline}" stroke-width="1.6"/>` +
+    `<path d="M50 23 V77" stroke="${k.c.detail}" stroke-width="3" stroke-dasharray="0.9 1.3"/>` +
+    `<rect x="48.4" y="25" width="3.2" height="6" rx="1" fill="${k.c.detail}"/>` +
+    k.line("M30.5 58 L36 68", 2) +
+    k.line("M69.5 58 L64 68", 2) +
+    `<path d="M79.5 38.5 L86 37.5 L87 44 L80.5 45 Z" fill="none" stroke="${k.c.detail}" stroke-width="1.1"/>`,
+  jacket: (k) =>
+    k.body("M36 14 L64 14 L79 20 Q87 24 89 34 L95 78 L83 80 L77 46 L77 86 L23 86 L23 46 L17 80 L5 78 L11 34 Q13 24 21 20 Z") +
+    k.band("M36 14 L50 30 L43 34 L31 17 Z") +
+    k.band("M64 14 L50 30 L57 34 L69 17 Z") +
+    k.line("M50 30 L50 86") +
+    k.dot(52.6, 40) +
+    k.dot(52.6, 52) +
+    k.dot(52.6, 64) +
+    k.dot(52.6, 76) +
+    `<path d="M28 40 L42 40 L42 53 L28 53 Z M58 40 L72 40 L72 53 L58 53 Z" fill="none" stroke="${k.c.detail}" stroke-width="1.1"/>` +
+    k.band("M27.5 38.5 L42.5 38.5 L42.5 43.5 L35 46 L27.5 43.5 Z") +
+    k.band("M57.5 38.5 L72.5 38.5 L72.5 43.5 L65 46 L57.5 43.5 Z") +
+    k.stitch("M6.3 73.5 L18 75.5") +
+    k.stitch("M93.7 73.5 L82 75.5") +
+    k.stitch("M24.5 82 H75.5"),
+  coat: (k) =>
+    k.body("M37 11 L63 11 L79 17 Q87 21 89 31 L95 76 L83 78 L78 44 L81 96 L19 96 L22 44 L17 78 L5 76 L11 31 Q13 21 21 17 Z") +
+    k.band("M37 11 L50 42 L44 40.5 L31.5 22 L36 19 Z") +
+    k.band("M63 11 L50 42 L56 40.5 L68.5 22 L64 19 Z") +
+    k.line("M50 42 L50 96") +
+    k.dot(44, 50) +
+    k.dot(56, 50) +
+    k.dot(44, 59) +
+    k.dot(56, 59) +
+    k.band("M20.7 66 L79.3 66 L79.6 72 L20.4 72 Z") +
+    `<rect x="46" y="64.5" width="8" height="9" rx="1.2" fill="none" stroke="${k.c.detail}" stroke-width="1.6"/>` +
+    k.line("M26 80 L37 80", 2) +
+    k.line("M63 80 L74 80", 2) +
+    k.stitch("M20.2 92.5 H79.8"),
+  // the existing dress shape, scaled up to the new box until the backend accepts dresses
+  dress: (k) =>
+    `<path transform="scale(4.1667)" d="M10 3.5h4l1 6 3.5 10.5h-13L9 9.5z" fill="${k.c.fill}" stroke="${k.c.outline}" stroke-width=".4" stroke-linejoin="round"/>`,
+};
+
+// shoes are wide and flat, so they're moved up to sit in the middle of the tile
+const DRAWING_LIFT = { sandal: 12, trainer: 12, boot: 2 };
+
+function garmentSvg(item) {
+  const style = garmentStyle(item);
+  const markup = DRAWINGS[style](drawingKit(garmentColors(item.color)));
+  const lift = DRAWING_LIFT[style] || 0;
+  return `<span class="garment" aria-hidden="true"><svg viewBox="0 ${lift} 100 100" xmlns="http://www.w3.org/2000/svg">${markup}</svg></span>`;
 }
 
 function updateColorPreview() {
@@ -464,7 +661,8 @@ function buildOutfit(seed = 0) {
     card.className = "piece-card";
     card.title = item.name;
     card.setAttribute("aria-label", item.name);
-    card.innerHTML = garmentSvg(item.category, item.color);
+    card.style.background = tileBackground(item);
+    card.innerHTML = garmentSvg(item);
     els.outfitPieces.append(card);
   });
   renderOutfitPalette(ordered);
@@ -479,8 +677,8 @@ function renderRecent() {
     button.className = "recent-card";
     const tile = document.createElement("div");
     tile.className = "recent-tile";
-    tile.style.background = pastelFor(item);
-    tile.innerHTML = garmentSvg(item.category, item.color);
+    tile.style.background = tileBackground(item);
+    tile.innerHTML = garmentSvg(item);
     const name = document.createElement("strong");
     name.textContent = item.name;
     const meta = document.createElement("span");
@@ -513,8 +711,8 @@ function renderCare() {
     rowEl.className = "care-row";
     const icon = document.createElement("div");
     icon.className = "care-icon";
-    icon.style.background = pastelFor(item);
-    icon.innerHTML = garmentSvg(item.category, item.color);
+    icon.style.background = tileBackground(item);
+    icon.innerHTML = garmentSvg(item);
     const text = document.createElement("div");
     const name = document.createElement("strong");
     name.textContent = item.name;

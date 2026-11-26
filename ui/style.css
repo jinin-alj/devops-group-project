@@ -384,8 +384,8 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   display: block;
 }
 
-.piece-card .garment { width: 3.2rem; height: 3.2rem; margin: 0; }
-.piece-card:first-child .garment { width: 4.6rem; height: 4.6rem; }
+.piece-card .garment { width: 4.6rem; height: 4.6rem; margin: 0; }
+.piece-card:first-child .garment { width: 7rem; height: 7rem; }
 
 .empty-pieces { grid-column: 1 / -1; grid-row: 1 / -1; display: grid; place-items: center; }
 
@@ -527,8 +527,8 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   overflow: hidden;
 }
 .recent-tile .garment {
-  width: 3.4rem;
-  height: 3.6rem;
+  width: 72%;
+  height: 72%;
   margin: 0;
 }
 
@@ -610,8 +610,8 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   background: var(--cream);
 }
 .care-icon .garment {
-  width: 1.25rem;
-  height: 1.35rem;
+  width: 1.85rem;
+  height: 1.85rem;
   margin: 0;
 }
 
